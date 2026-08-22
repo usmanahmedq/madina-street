@@ -1,726 +1,298 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { House, HouseCategory, HouseStatus } from '../types/index';
+import { House } from '../types/index';
 import { useSettings } from '../context/SettingsContext';
-import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import { ExportButton } from '../components/common/ExportButton';
-import { generatePdfTable } from '../utils/pdfGenerator';
-import {
-  Home, Search, Plus, Filter, Edit, Trash2, Eye,
-  Upload, UserCheck, Phone, MapPin, Users, MessageSquare,
-  FileSpreadsheet, FileText, Printer, ArrowUpDown, ArrowUp, ArrowDown,
-  AlertTriangle, RefreshCw, CheckCircle2, ShieldAlert
+import { 
+  Home, Plus, Search, Filter, Edit2, Trash2, MessageSquare, 
+  Phone, User, Shield, AlertCircle, CheckCircle, RefreshCw,
+  ExternalLink, Building
 } from 'lucide-react';
 
 export const HouseManagement: React.FC = () => {
-  const { formatCurrency, settings } = useSettings();
-  const { canManageFinances } = useAuth();
-
+  const { settings, formatCurrency } = useSettings();
   const [houses, setHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Advanced Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [sectorFilter, setSectorFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [feeRangeFilter, setFeeRangeFilter] = useState('ALL');
-  const [duesFilter, setDuesFilter] = useState('ALL');
-  const [dateFilter, setDateFilter] = useState('ALL');
-
-  // Sorting State
-  const [sortField, setSortField] = useState<'houseNo' | 'headName' | 'monthlyFee' | 'currentDues' | 'lastPaymentDate'>('houseNo');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(10);
 
   // Modal States
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingHouse, setEditingHouse] = useState<House | null>(null);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [deleteTargetHouse, setDeleteTargetHouse] = useState<House | null>(null);
 
   // Form State
-  const [formHouseNo, setFormHouseNo] = useState('');
-  const [formStreet, setFormStreet] = useState('Street 1');
-  const [formSector, setFormSector] = useState('Sector A');
-  const [formCategory, setFormCategory] = useState<HouseCategory>('Residential Standard');
-  const [formType, setFormType] = useState<'Owner' | 'Tenant'>('Owner');
-  const [formHeadName, setFormHeadName] = useState('');
-  const [formCnic, setFormCnic] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formWhatsapp, setFormWhatsapp] = useState('');
-  const [formFamilyMembers, setFormFamilyMembers] = useState(4);
-  const [formMonthlyFee, setFormMonthlyFee] = useState(1500);
-  const [formStatus, setFormStatus] = useState<HouseStatus>('Active');
-  const [formCurrentDues, setFormCurrentDues] = useState(0);
-  const [formRegistrationMonth, setFormRegistrationMonth] = useState('August 2026');
-  const [formNotes, setFormNotes] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [houseNo, setHouseNo] = useState('');
+  const [headName, setHeadName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [cnic, setCnic] = useState('');
+  const [sector, setSector] = useState('Sector A');
+  const [street, setStreet] = useState('');
+  const [category, setCategory] = useState('Residential 100 Sq Yd');
+  const [monthlyFee, setMonthlyFee] = useState<number>(1000);
+  const [currentDues, setCurrentDues] = useState<number>(0);
+  const [status, setStatus] = useState<'Active' | 'Closed' | 'Defaulter' | 'Suspended'>('Active');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Import JSON/CSV string state
-  const [importCsvText, setImportCsvText] = useState('');
-
-  const fetchHouses = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.getHouses(true); // includeDeleted for full directory
-      if (res.success) {
-        setHouses(res.houses);
-      }
-    } catch (e) {
-      console.error('Error fetching houses', e);
+      const res = await api.getHouses();
+      if (res.success) setHouses(res.houses || []);
+    } catch (err) {
+      console.error('Failed to load houses:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHouses();
+    fetchData();
   }, []);
 
   const openAddModal = () => {
     setEditingHouse(null);
-    setFormHouseNo(`MS-A-${Math.floor(Math.random() * 800 + 100)}`);
-    setFormStreet('Street 1');
-    setFormSector('Sector A');
-    setFormCategory('Residential Standard');
-    setFormType('Owner');
-    setFormHeadName('');
-    setFormCnic('');
-    setFormPhone('0300-1234567');
-    setFormWhatsapp('0300-1234567');
-    setFormFamilyMembers(4);
-    setFormMonthlyFee(1500);
-    setFormStatus('Active');
-    setFormCurrentDues(0);
-    setFormRegistrationMonth('August 2026');
-    setFormNotes('');
-    setFormError(null);
-    setShowAddModal(true);
+    setHouseNo('');
+    setHeadName('');
+    setPhone('');
+    setCnic('');
+    setSector('Sector A');
+    setStreet('Street 1');
+    setCategory('Residential 100 Sq Yd');
+    setMonthlyFee(1000);
+    setCurrentDues(0);
+    setStatus('Active');
+    setShowModal(true);
   };
 
-  const openEditModal = (house: any) => {
-    setEditingHouse(house);
-    setFormHouseNo(house.houseNo);
-    setFormStreet(house.street);
-    setFormSector(house.sector);
-    setFormCategory(house.category);
-    setFormType(house.residentType);
-    setFormHeadName(house.headName);
-    setFormCnic(house.cnic || '');
-    setFormPhone(house.phone);
-    setFormWhatsapp(house.whatsapp || house.phone);
-    setFormFamilyMembers(house.familyMembers);
-    setFormMonthlyFee(house.monthlyFee);
-    setFormStatus(house.status);
-    setFormCurrentDues(house.currentDues);
-    setFormRegistrationMonth(house.registrationMonth || 'August 2026');
-    setFormNotes(house.notes || '');
-    setFormError(null);
-    setShowAddModal(true);
+  const openEditModal = (h: House) => {
+    setEditingHouse(h);
+    setHouseNo(h.houseNo);
+    setHeadName(h.headName);
+    setPhone(h.phone || '');
+    setCnic(h.cnic || '');
+    setSector(h.sector || 'Sector A');
+    setStreet(h.street || '');
+    setCategory(h.category || 'Residential');
+    setMonthlyFee(h.monthlyFee || 0);
+    setCurrentDues(h.currentDues || 0);
+    setStatus(h.status || 'Active');
+    setShowModal(true);
   };
 
-  const validateCnic = (cnicVal: string) => {
-    if (!cnicVal.trim()) return true;
-    const clean = cnicVal.replace(/\D/g, '');
-    return clean.length === 13;
-  };
-
-  const handleCnicChange = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 13);
-    let formatted = digits;
-    if (digits.length > 5 && digits.length <= 12) {
-      formatted = `${digits.slice(0, 5)}-${digits.slice(5)}`;
-    } else if (digits.length > 12) {
-      formatted = `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
-    }
-    setFormCnic(formatted);
-  };
-
-  const handleSaveHouse = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
-
-    if (!formHouseNo.trim()) {
-      setFormError('House Number is required.');
-      return;
-    }
-    if (!formHeadName.trim()) {
-      setFormError('Resident Owner / Head Name is required.');
-      return;
-    }
-    if (!formPhone.trim()) {
-      setFormError('Mobile phone number is required.');
-      return;
-    }
-    if (Number(formMonthlyFee) <= 0) {
-      setFormError('Monthly Fee contribution must be greater than 0.');
-      return;
-    }
-    if (formCnic && !validateCnic(formCnic)) {
-      setFormError('CNIC must contain 13 digits (e.g. 35202-1234567-1).');
-      return;
-    }
-
-    const payload = {
-      houseNo: formHouseNo,
-      street: formStreet,
-      sector: formSector,
-      category: formCategory,
-      residentType: formType,
-      headName: formHeadName,
-      cnic: formCnic,
-      phone: formPhone,
-      whatsapp: formWhatsapp || formPhone,
-      familyMembers: Number(formFamilyMembers),
-      monthlyFee: Number(formMonthlyFee),
-      status: formStatus,
-      currentDues: Number(formCurrentDues),
-      registrationMonth: formRegistrationMonth,
-      notes: formNotes,
-    };
-
+    setSubmitting(true);
     try {
+      const payload = {
+        houseNo,
+        headName,
+        phone,
+        cnic,
+        sector,
+        street,
+        category,
+        monthlyFee: Number(monthlyFee),
+        currentDues: Number(currentDues),
+        status,
+      };
+
       if (editingHouse) {
         await api.updateHouse(editingHouse.id, payload);
       } else {
         await api.createHouse(payload);
       }
-      setShowAddModal(false);
-      fetchHouses();
+
+      setShowModal(false);
+      fetchData();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to save house record.');
+      alert(err.message || 'Failed to save house record');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleSoftDelete = async () => {
-    if (!deleteTargetHouse) return;
-    try {
-      await api.deleteHouse(deleteTargetHouse.id);
-      setDeleteTargetHouse(null);
-      fetchHouses();
-    } catch (e: any) {
-      alert(e.message || 'Failed to delete house');
+  // WhatsApp Message Sender Function
+  const handleSendWhatsApp = (house: House) => {
+    if (!house.phone) {
+      alert('Is resident ka Phone/WhatsApp number add nahi hai!');
+      return;
     }
-  };
 
-  const handleImportCsv = async () => {
-    if (!importCsvText) return;
-    try {
-      const lines = importCsvText.trim().split('\n');
-      const imported = lines.map(line => {
-        const parts = line.split(',');
-        return {
-          houseNo: parts[0]?.trim(),
-          headName: parts[1]?.trim(),
-          phone: parts[2]?.trim(),
-          sector: parts[3]?.trim() || 'Sector A',
-          street: parts[4]?.trim() || 'Street 1',
-          monthlyFee: Number(parts[5]?.trim()) || 1500,
-        };
-      });
-
-      const res = await api.importHouses(imported);
-      if (res.success) {
-        alert(`Successfully imported ${res.addedCount} house records!`);
-        setShowImportModal(false);
-        setImportCsvText('');
-        fetchHouses();
-      }
-    } catch (e) {
-      alert('Invalid CSV payload format');
+    // Number format clean karein (e.g., 03001234567 -> 923001234567)
+    let cleanPhone = house.phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '92' + cleanPhone.slice(1);
     }
+
+    const currentMonth = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const mohallaName = settings?.mohallaName || 'Madina Street Mohalla Society';
+
+    // WhatsApp Reminder Template Message
+    const message = `Assalam-o-Alaikum *${house.headName}*,\n\n` +
+      `Yeh *${mohallaName}* Committee ki taraf se monthly fee reminder hai.\n\n` +
+      `📌 *House No:* ${house.houseNo}\n` +
+      `📅 *Target Month:* ${currentMonth}\n` +
+      `💰 *Pending Dues Amount:* Rs. ${house.currentDues.toLocaleString()}\n` +
+      `💵 *Monthly Tariff:* Rs. ${house.monthlyFee.toLocaleString()}\n\n` +
+      `Baraye meharbani apni monthly collection fee jald se jald office ya collector ko jama karwayein.\n` +
+      `Shukriya!`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
+    
+    window.open(whatsappUrl, '_blank');
   };
 
-  const cleanPhoneForWhatsapp = (phoneStr: string) => {
-    const digits = phoneStr.replace(/\D/g, '');
-    if (digits.startsWith('0')) return '92' + digits.substring(1);
-    if (digits.startsWith('92')) return digits;
-    return '92' + digits;
-  };
+  const filteredHouses = houses.filter(h => {
+    const matchSearch = h.houseNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      h.headName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (h.phone && h.phone.includes(searchTerm));
+    const matchSector = sectorFilter === 'ALL' || h.sector === sectorFilter;
+    const matchStatus = statusFilter === 'ALL' || h.status === statusFilter;
+    return matchSearch && matchSector && matchStatus;
+  });
 
-  const filteredAndSortedHouses = useMemo(() => {
-    return houses.filter(h => {
-      const search = searchTerm.toLowerCase().trim();
-      const matchesSearch = !search || (
-        h.houseNo.toLowerCase().includes(search) ||
-        h.headName.toLowerCase().includes(search) ||
-        (h.cnic && h.cnic.toLowerCase().includes(search)) ||
-        h.phone.includes(search) ||
-        (h.whatsapp && h.whatsapp.includes(search))
-      );
-
-      const matchesSector = sectorFilter === 'ALL' || h.sector === sectorFilter;
-      const matchesStatus = statusFilter === 'ALL' || h.status === statusFilter;
-
-      let matchesFee = true;
-      if (feeRangeFilter === '<1000') matchesFee = h.monthlyFee < 1000;
-      else if (feeRangeFilter === '1000-2000') matchesFee = h.monthlyFee >= 1000 && h.monthlyFee <= 2000;
-      else if (feeRangeFilter === '2000-5000') matchesFee = h.monthlyFee > 2000 && h.monthlyFee <= 5000;
-      else if (feeRangeFilter === '>5000') matchesFee = h.monthlyFee > 5000;
-
-      let matchesDues = true;
-      if (duesFilter === 'CLEAR') matchesDues = (h.currentDues === 0);
-      else if (duesFilter === 'DEFAULTER') matchesDues = (h.currentDues > 0);
-
-      let matchesDate = true;
-      if (dateFilter === 'TODAY') {
-        const todayStr = new Date().toISOString().split('T')[0];
-        matchesDate = h.joinedDate === todayStr || (h.createdAt && h.createdAt.startsWith(todayStr));
-      } else if (dateFilter === 'THIS_MONTH') {
-        const thisMonthStr = new Date().toISOString().slice(0, 7);
-        matchesDate = (h.joinedDate && h.joinedDate.startsWith(thisMonthStr)) || (h.createdAt && h.createdAt.startsWith(thisMonthStr));
-      }
-
-      return matchesSearch && matchesSector && matchesStatus && matchesFee && matchesDues && matchesDate;
-    }).sort((a, b) => {
-      let comparison = 0;
-      if (sortField === 'houseNo') {
-        comparison = a.houseNo.localeCompare(b.houseNo, undefined, { numeric: true });
-      } else if (sortField === 'headName') {
-        comparison = a.headName.localeCompare(b.headName);
-      } else if (sortField === 'monthlyFee') {
-        comparison = a.monthlyFee - b.monthlyFee;
-      } else if (sortField === 'currentDues') {
-        comparison = a.currentDues - b.currentDues;
-      } else if (sortField === 'lastPaymentDate') {
-        const dateA = a.lastPaymentDate ? new Date(a.lastPaymentDate).getTime() : 0;
-        const dateB = b.lastPaymentDate ? new Date(b.lastPaymentDate).getTime() : 0;
-        comparison = dateA - dateB;
-      }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [houses, searchTerm, sectorFilter, statusFilter, feeRangeFilter, duesFilter, dateFilter, sortField, sortDirection]);
-
-  const totalItems = filteredAndSortedHouses.length;
-  const totalPages = pageSize === -1 ? 1 : Math.ceil(totalItems / pageSize) || 1;
-  const paginatedHouses = useMemo(() => {
-    if (pageSize === -1) return filteredAndSortedHouses;
-    const start = (currentPage - 1) * pageSize;
-    return filteredAndSortedHouses.slice(start, start + pageSize);
-  }, [filteredAndSortedHouses, currentPage, pageSize]);
-
-  const handleSort = (field: typeof sortField) => {
-    if (sortField === field) {
-      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const handleExportPdf = () => {
-    const headers = ['House No', 'Resident Owner', 'Mobile / WhatsApp', 'Sector', 'Fee (Rs.)', 'Dues (Rs.)', 'Status', 'Last Payment'];
-    const rows = filteredAndSortedHouses.map(h => [
-      h.houseNo,
-      h.headName,
-      h.phone,
-      `${h.sector}, ${h.street}`,
-      h.monthlyFee.toLocaleString(),
-      h.currentDues > 0 ? `Rs. ${h.currentDues.toLocaleString()}` : 'Clear',
-      h.status,
-      h.lastPaymentDate || 'Never',
-    ]);
-
-    generatePdfTable({
-      title: 'Mohalla House Directory & Dues Ledger',
-      filename: 'Madina_Street_House_Directory',
-      headers,
-      rows,
-    });
-  };
-
-  const handlePrintDirectory = () => {
-    window.print();
-  };
-
-  const activeCount = houses.filter(h => h.status === 'Active' || h.status === 'Good Standing').length;
-  const defaulterCount = houses.filter(h => h.currentDues > 0 || h.status === 'Defaulter').length;
-  const totalDuesAmount = houses.reduce((sum, h) => sum + (h.currentDues || 0), 0);
-  const totalTariffMonthly = houses.reduce((sum, h) => sum + (h.monthlyFee || 0), 0);
+  const sectorsList = Array.from(new Set(houses.map(h => h.sector).filter(Boolean)));
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900">House Directory & Master Register</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Comprehensive database of residents, monthly tariffs, contacts, and dues status</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">House Directory & Residents Management</h1>
+            <Badge variant="teal" size="sm">{houses.length} Properties</Badge>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Manage house records, resident contact information, monthly tariffs, pending dues, and send WhatsApp reminders
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <ExportButton filename="Madina_Street_Houses" data={filteredAndSortedHouses} label="CSV" />
-          
-          <button
-            onClick={handleExportPdf}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs"
-            title="Download PDF Report"
+        <button
+          onClick={openAddModal}
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          Add New House
+        </button>
+      </div>
+
+      {/* Filters and Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="relative flex-1 w-full max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search house #, resident head, phone..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-none"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <select
+            value={sectorFilter}
+            onChange={e => setSectorFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-teal-500"
           >
-            <FileText className="w-3.5 h-3.5 text-teal-700" />
-            PDF Report
-          </button>
+            <option value="ALL">All Sectors</option>
+            {sectorsList.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-teal-500"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Defaulter">Defaulter</option>
+            <option value="Closed">Closed</option>
+            <option value="Suspended">Suspended</option>
+          </select>
 
           <button
-            onClick={handlePrintDirectory}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs"
-            title="Print House Table"
+            onClick={fetchData}
+            className="p-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+            title="Refresh Data"
           >
-            <Printer className="w-3.5 h-3.5 text-slate-600" />
-            Print
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-teal-600' : ''}`} />
           </button>
-
-          {canManageFinances && (
-            <>
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-2xs"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Import CSV
-              </button>
-              <button
-                onClick={openAddModal}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Register House
-              </button>
-            </>
-          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-          <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total Registered Houses</p>
-          <p className="text-xl font-black text-slate-900 mt-1">{houses.length}</p>
-          <p className="text-[11px] text-teal-700 font-medium mt-0.5">{activeCount} Active Contributing</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-          <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Monthly Assessed Tariff</p>
-          <p className="text-xl font-black text-teal-800 mt-1">{formatCurrency(totalTariffMonthly)}</p>
-          <p className="text-[11px] text-slate-500 font-medium mt-0.5">Expected Monthly Revenue</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-          <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Houses With Pending Dues</p>
-          <p className="text-xl font-black text-rose-600 mt-1">{defaulterCount}</p>
-          <p className="text-[11px] text-rose-700 font-medium mt-0.5">Pending Action / Reminders</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-          <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total Outstanding Dues</p>
-          <p className="text-xl font-black text-rose-700 mt-1">{formatCurrency(totalDuesAmount)}</p>
-          <p className="text-[11px] text-slate-400 font-medium mt-0.5">Uncollected Receivables</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col md:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by House #, Owner Name, CNIC, Mobile, or WhatsApp..."
-              value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setSectorFilter('ALL');
-              setStatusFilter('ALL');
-              setFeeRangeFilter('ALL');
-              setDuesFilter('ALL');
-              setDateFilter('ALL');
-              setCurrentPage(1);
-            }}
-            className="px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors whitespace-nowrap"
-          >
-            Reset Filters
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sector</label>
-            <select
-              value={sectorFilter}
-              onChange={e => { setSectorFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-700"
-            >
-              <option value="ALL">All Sectors</option>
-              <option value="Sector A">Sector A</option>
-              <option value="Sector B">Sector B</option>
-              <option value="Commercial Lane">Commercial Lane</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</label>
-            <select
-              value={statusFilter}
-              onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-700"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="Active">Active</option>
-              <option value="Good Standing">Good Standing</option>
-              <option value="Warning">Warning</option>
-              <option value="Defaulter">Defaulter</option>
-              <option value="Rented">Rented</option>
-              <option value="Vacant">Vacant</option>
-              <option value="Exempted">Exempted</option>
-              <option value="Closed">Closed</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Monthly Tariff</label>
-            <select
-              value={feeRangeFilter}
-              onChange={e => { setFeeRangeFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-700"
-            >
-              <option value="ALL">All Fees</option>
-              <option value="<1000">Below Rs. 1,000</option>
-              <option value="1000-2000">Rs. 1,000 - 2,000</option>
-              <option value="2000-5000">Rs. 2,000 - 5,000</option>
-              <option value=">5000">Above Rs. 5,000</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dues Status</label>
-            <select
-              value={duesFilter}
-              onChange={e => { setDuesFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-700"
-            >
-              <option value="ALL">All Dues</option>
-              <option value="CLEAR">Fully Paid (Clear)</option>
-              <option value="DEFAULTER">Has Pending Dues</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Created Date</label>
-            <select
-              value={dateFilter}
-              onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
-              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-700"
-            >
-              <option value="ALL">All Time</option>
-              <option value="THIS_MONTH">Added This Month</option>
-              <option value="TODAY">Added Today</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
+      {/* House Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider select-none">
-                <th
-                  onClick={() => handleSort('houseNo')}
-                  className="p-4 cursor-pointer hover:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    House No
-                    {sortField === 'houseNo' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-teal-700" /> : <ArrowDown className="w-3.5 h-3.5 text-teal-700" />
-                    ) : <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />}
-                  </div>
-                </th>
-
-                <th
-                  onClick={() => handleSort('headName')}
-                  className="p-4 cursor-pointer hover:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    Resident Head & CNIC
-                    {sortField === 'headName' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-teal-700" /> : <ArrowDown className="w-3.5 h-3.5 text-teal-700" />
-                    ) : <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />}
-                  </div>
-                </th>
-
-                <th className="p-4">Contact / WhatsApp</th>
-                <th className="p-4">Sector & Street</th>
-
-                <th
-                  onClick={() => handleSort('monthlyFee')}
-                  className="p-4 cursor-pointer hover:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    Monthly Fee
-                    {sortField === 'monthlyFee' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-teal-700" /> : <ArrowDown className="w-3.5 h-3.5 text-teal-700" />
-                    ) : <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />}
-                  </div>
-                </th>
-
-                <th
-                  onClick={() => handleSort('currentDues')}
-                  className="p-4 cursor-pointer hover:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    Outstanding Dues
-                    {sortField === 'currentDues' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-teal-700" /> : <ArrowDown className="w-3.5 h-3.5 text-teal-700" />
-                    ) : <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />}
-                  </div>
-                </th>
-
-                <th
-                  onClick={() => handleSort('lastPaymentDate')}
-                  className="p-4 cursor-pointer hover:bg-slate-100 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    Last Payment
-                    {sortField === 'lastPaymentDate' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-teal-700" /> : <ArrowDown className="w-3.5 h-3.5 text-teal-700" />
-                    ) : <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />}
-                  </div>
-                </th>
-
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Actions</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                <th className="p-3.5">House No</th>
+                <th className="p-3.5">Resident Head</th>
+                <th className="p-3.5">Contact / WhatsApp</th>
+                <th className="p-3.5">Sector & Street</th>
+                <th className="p-3.5">Category</th>
+                <th className="p-3.5">Monthly Fee</th>
+                <th className="p-3.5">Pending Dues</th>
+                <th className="p-3.5">Status</th>
+                <th className="p-3.5 text-right">Quick Actions</th>
               </tr>
             </thead>
-
             <tbody className="divide-y divide-slate-100 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-slate-400 font-semibold">
-                    <RefreshCw className="w-6 h-6 text-teal-600 animate-spin mx-auto mb-2" />
-                    Loading master house directory...
-                  </td>
+                  <td colSpan={9} className="text-center py-8 text-slate-400 font-semibold">Loading properties directory...</td>
                 </tr>
-              ) : paginatedHouses.length === 0 ? (
+              ) : filteredHouses.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-slate-400 font-semibold">
-                    No houses match your selected search criteria.
-                  </td>
+                  <td colSpan={9} className="text-center py-8 text-slate-400 font-semibold">No houses found matching your criteria.</td>
                 </tr>
               ) : (
-                paginatedHouses.map(h => (
-                  <tr key={h.id} className={`hover:bg-slate-50/80 transition-colors ${h.isDeleted ? 'bg-slate-50/60 opacity-75' : ''}`}>
-                    <td className="p-4">
-                      <Link to={`/houses/${h.id}`} className="font-extrabold text-teal-800 hover:text-teal-900 hover:underline flex items-center gap-1.5">
-                        {h.houseNo}
-                        {h.isDeleted && <span className="px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600">Soft Deleted</span>}
-                      </Link>
-                      <span className="block text-[10px] text-slate-400 font-normal">{h.residentType} • {h.category}</span>
+                filteredHouses.map(h => (
+                  <tr key={h.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3.5 font-black text-slate-900 text-sm">{h.houseNo}</td>
+                    <td className="p-3.5">
+                      <div className="font-bold text-slate-900">{h.headName}</div>
+                      <div className="text-[10px] text-slate-400">CNIC: {h.cnic || 'N/A'}</div>
                     </td>
-
-                    <td className="p-4">
-                      <p className="font-bold text-slate-900">{h.headName}</p>
-                      {h.cnic ? (
-                        <p className="text-[10px] font-mono text-slate-500">CNIC: {h.cnic}</p>
-                      ) : (
-                        <p className="text-[10px] text-slate-400 italic">No CNIC on file</p>
-                      )}
+                    <td className="p-3.5">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                        <Phone className="w-3 h-3 text-slate-400" />
+                        {h.phone || 'N/A'}
+                      </div>
                     </td>
-
-                    <td className="p-4">
-                      <p className="font-bold text-slate-800">{h.phone}</p>
-                      <a
-                        href={`https://wa.me/${cleanPhoneForWhatsapp(h.whatsapp || h.phone)}?text=Assalam%20o%20Alaikum%20${encodeURIComponent(h.headName)},%20regarding%20House%20${h.houseNo}%20monthly%20contribution.`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 hover:underline mt-0.5"
-                      >
-                        <MessageSquare className="w-3 h-3 text-emerald-600" /> WhatsApp
-                      </a>
+                    <td className="p-3.5 text-slate-600">{h.sector}, {h.street}</td>
+                    <td className="p-3.5 text-slate-600">{h.category}</td>
+                    <td className="p-3.5 font-semibold text-slate-800">{formatCurrency(h.monthlyFee)}</td>
+                    <td className={`p-3.5 font-black ${h.currentDues > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {formatCurrency(h.currentDues)}
                     </td>
-
-                    <td className="p-4 text-slate-700">
-                      {h.sector}
-                      <span className="block text-[10px] text-slate-400">{h.street}</span>
-                    </td>
-
-                    <td className="p-4 font-bold text-slate-900">{formatCurrency(h.monthlyFee)}</td>
-
-                    <td className="p-4">
-                      {h.currentDues > 0 ? (
-                        <div>
-                          <span className="font-black text-rose-600">{formatCurrency(h.currentDues)}</span>
-                          <span className="block text-[10px] font-bold text-rose-500">Pending</span>
-                        </div>
-                      ) : (
-                        <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Clear
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-4 text-slate-600">
-                      {h.lastPaymentDate ? (
-                        <div>
-                          <p className="font-semibold text-slate-800">{h.lastPaymentDate}</p>
-                          {h.lastReceiptNo && <p className="text-[10px] text-teal-800 font-mono">#{h.lastReceiptNo}</p>}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 italic">No receipts</span>
-                      )}
-                    </td>
-
-                    <td className="p-4">
-                      <Badge
-                        variant={
-                          h.status === 'Active' || h.status === 'Good Standing'
-                            ? 'success'
-                            : h.status === 'Defaulter'
-                            ? 'danger'
-                            : h.status === 'Warning'
-                            ? 'warning'
-                            : h.status === 'Exempted'
-                            ? 'primary'
-                            : 'neutral'
-                        }
-                      >
+                    <td className="p-3.5">
+                      <Badge variant={h.status === 'Active' ? 'success' : h.status === 'Defaulter' ? 'danger' : 'neutral'}>
                         {h.status}
                       </Badge>
                     </td>
-
-                    <td className="p-4 text-right space-x-1 whitespace-nowrap">
-                      <Link
-                        to={`/houses/${h.id}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors"
-                        title="View Profile & Statement"
+                    <td className="p-3.5 text-right space-x-1">
+                      {/* WhatsApp Reminder Button */}
+                      <button
+                        onClick={() => handleSendWhatsApp(h)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs"
+                        title="Send WhatsApp Dues Reminder"
                       >
-                        <Eye className="w-3.5 h-3.5" /> Profile
-                      </Link>
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                        WhatsApp
+                      </button>
 
-                      {canManageFinances && !h.isDeleted && (
-                        <>
-                          <button
-                            onClick={() => openEditModal(h)}
-                            className="p-1.5 text-slate-400 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
-                            title="Edit Record"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTargetHouse(h)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Delete Record"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => openEditModal(h)}
+                        className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                        title="Edit House Details"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -728,366 +300,159 @@ export const HouseManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
-
-        <div className="p-4 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
-          <div className="flex items-center gap-3">
-            <span>
-              Showing <strong className="text-slate-900">{paginatedHouses.length}</strong> of{' '}
-              <strong className="text-slate-900">{totalItems}</strong> entries
-            </span>
-
-            <div className="flex items-center gap-1">
-              <span className="text-slate-400">Rows per page:</span>
-              <select
-                value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                className="px-2 py-1 bg-white border border-slate-300 rounded-md font-semibold"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={-1}>All</option>
-              </select>
-            </div>
-          </div>
-
-          {pageSize !== -1 && totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-semibold hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-2xs"
-              >
-                Previous
-              </button>
-
-              <span className="font-bold text-slate-800">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-semibold hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-2xs"
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Register / Edit House Modal */}
+      {/* Add / Edit House Modal */}
       <Modal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title={editingHouse ? `Edit House Record - ${editingHouse.houseNo}` : 'Register New House'}
-        subtitle="Specify residence details, CNIC, mobile, monthly tariff, and initial dues"
-        maxWidth="xl"
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingHouse ? `Edit House Details - ${editingHouse.houseNo}` : 'Register New House Property'}
+        subtitle="Specify resident details, sector location, monthly tariff, and initial dues"
+        maxWidth="lg"
       >
-        <form onSubmit={handleSaveHouse} className="space-y-4 text-xs">
-          {formError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 font-semibold text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-              {formError}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">House Number *</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. MS-A-101"
-                value={formHouseNo}
-                onChange={e => setFormHouseNo(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-900"
+                placeholder="e.g. H-102"
+                value={houseNo}
+                onChange={e => setHouseNo(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Resident Owner / Head Name *</label>
+              <label className="block font-bold text-slate-700 mb-1">Resident Head Name *</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Haji Muhammad Younas"
-                value={formHeadName}
-                onChange={e => setFormHeadName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Sector</label>
-              <select
-                value={formSector}
-                onChange={e => setFormSector(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white font-medium text-slate-800"
-              >
-                <option value="Sector A">Sector A</option>
-                <option value="Sector B">Sector B</option>
-                <option value="Commercial Lane">Commercial Lane</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Street</label>
-              <input
-                type="text"
-                placeholder="e.g. Street 1"
-                value={formStreet}
-                onChange={e => setFormStreet(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                placeholder="e.g. Muhammad Farooq"
+                value={headName}
+                onChange={e => setHeadName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Category</label>
-              <select
-                value={formCategory}
-                onChange={e => setFormCategory(e.target.value as HouseCategory)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white font-medium text-slate-800"
-              >
-                <option value="Residential Standard">Residential Standard</option>
-                <option value="Residential Large">Residential Large</option>
-                <option value="Commercial Shop">Commercial Shop</option>
-                <option value="Plaza / Office">Plaza / Office</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Resident Type</label>
-              <select
-                value={formType}
-                onChange={e => setFormType(e.target.value as 'Owner' | 'Tenant')}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white font-medium text-slate-800"
-              >
-                <option value="Owner">Owner</option>
-                <option value="Tenant">Tenant</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Mobile Phone *</label>
+              <label className="block font-bold text-slate-700 mb-1">Mobile / WhatsApp Number *</label>
               <input
                 type="text"
                 required
-                placeholder="0300-1234567"
-                value={formPhone}
-                onChange={e => setFormPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                placeholder="03001234567"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
               />
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">WhatsApp Number</label>
-              <input
-                type="text"
-                placeholder="0300-1234567"
-                value={formWhatsapp}
-                onChange={e => setFormWhatsapp(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">CNIC Number</label>
               <input
                 type="text"
-                placeholder="35202-0000000-0"
-                value={formCnic}
-                onChange={e => handleCnicChange(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs"
+                placeholder="42101-1234567-1"
+                value={cnic}
+                onChange={e => setCnic(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
               />
-              <span className="text-[10px] text-slate-400">13 digits standard Pakistani CNIC</span>
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Monthly Tariff (Rs.) *</label>
+              <label className="block font-bold text-slate-700 mb-1">Sector *</label>
+              <input
+                type="text"
+                required
+                placeholder="Sector A"
+                value={sector}
+                onChange={e => setSector(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Street *</label>
+              <input
+                type="text"
+                required
+                placeholder="Street 5"
+                value={street}
+                onChange={e => setStreet(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Property Category</label>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold bg-white"
+              >
+                <option value="Residential 80 Sq Yd">Residential 80 Sq Yd</option>
+                <option value="Residential 120 Sq Yd">Residential 120 Sq Yd</option>
+                <option value="Residential 240 Sq Yd">Residential 240 Sq Yd</option>
+                <option value="Commercial Shop">Commercial Shop</option>
+                <option value="Plaza / Commercial">Plaza / Commercial</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Monthly Tariff Fee (Rs.) *</label>
               <input
                 type="number"
                 required
-                min="1"
-                value={formMonthlyFee}
-                onChange={e => setFormMonthlyFee(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg font-extrabold text-teal-800 text-sm"
+                min={0}
+                value={monthlyFee}
+                onChange={e => setMonthlyFee(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-extrabold text-teal-800"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Status</label>
+              <label className="block font-bold text-slate-700 mb-1">Current Pending Dues (Rs.)</label>
+              <input
+                type="number"
+                min={0}
+                value={currentDues}
+                onChange={e => setCurrentDues(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-extrabold text-rose-700"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Account Status</label>
               <select
-                value={formStatus}
-                onChange={e => setFormStatus(e.target.value as HouseStatus)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white font-medium text-slate-800"
+                value={status}
+                onChange={e => setStatus(e.target.value as any)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold bg-white"
               >
                 <option value="Active">Active</option>
-                <option value="Rented">Rented</option>
-                <option value="Vacant">Vacant</option>
-                <option value="Exempted">Exempted</option>
+                <option value="Defaulter">Defaulter</option>
                 <option value="Closed">Closed</option>
+                <option value="Suspended">Suspended</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Registration Start Month</label>
-              <select
-                value={formRegistrationMonth}
-                onChange={e => setFormRegistrationMonth(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white font-semibold text-teal-800"
-              >
-                <option value="January 2026">January 2026</option>
-                <option value="February 2026">February 2026</option>
-                <option value="March 2026">March 2026</option>
-                <option value="April 2026">April 2026</option>
-                <option value="May 2026">May 2026</option>
-                <option value="June 2026">June 2026</option>
-                <option value="July 2026">July 2026</option>
-                <option value="August 2026">August 2026</option>
-                <option value="September 2026">September 2026</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Family Members Count</label>
-              <input
-                type="number"
-                min="1"
-                value={formFamilyMembers}
-                onChange={e => setFormFamilyMembers(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Initial Outstanding Dues (Rs.)</label>
-              <input
-                type="number"
-                min="0"
-                value={formCurrentDues}
-                onChange={e => setFormCurrentDues(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-rose-600"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Notes / Internal Remarks</label>
-            <textarea
-              rows={2}
-              placeholder="e.g. Special instructions, landmark near house..."
-              value={formNotes}
-              onChange={e => setFormNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setShowAddModal(false)}
+              onClick={() => setShowModal(false)}
               className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm"
+              disabled={submitting}
+              className="px-5 py-2 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm disabled:opacity-50"
             >
-              Save Record
+              {submitting ? 'Saving...' : 'Save House Record'}
             </button>
           </div>
         </form>
-      </Modal>
-
-      {/* Soft Delete Warning Modal */}
-      <Modal
-        isOpen={!!deleteTargetHouse}
-        onClose={() => setDeleteTargetHouse(null)}
-        title="Confirm House Record Removal"
-        subtitle="Enterprise Soft Delete Protection"
-        maxWidth="md"
-      >
-        {deleteTargetHouse && (
-          <div className="space-y-4 text-xs">
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-              <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-bold text-amber-900">Soft Delete Safeguard</h4>
-                <p className="text-amber-800 mt-1">
-                  Are you sure you want to delete house record <strong>{deleteTargetHouse.houseNo}</strong> ({deleteTargetHouse.headName})?
-                </p>
-                <p className="text-amber-700 text-[11px] mt-2 italic">
-                  Note: If this house has existing receipt history, it will be marked as <strong>Closed / Soft-Deleted</strong> to protect all audit trails and financial ledgers.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setDeleteTargetHouse(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSoftDelete}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-xs"
-              >
-                Proceed With Deletion
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Batch Import CSV Modal */}
-      <Modal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        title="Batch Import Houses (CSV Format)"
-        subtitle="Paste CSV rows in format: HouseNo, ResidentName, Phone, Sector, Street, MonthlyFee"
-        maxWidth="lg"
-      >
-        <div className="space-y-3 text-xs">
-          <p className="text-slate-500">Sample Row Format:</p>
-          <code className="block bg-slate-900 text-teal-300 p-3 rounded-lg font-mono text-[11px]">
-            MS-A-110, Haji Tariq, 0300-1112233, Sector A, Street 1, 1500<br/>
-            MS-A-111, Rashid Khan, 0300-2223344, Sector A, Street 2, 1500
-          </code>
-
-          <textarea
-            rows={6}
-            placeholder="Paste CSV contents here..."
-            value={importCsvText}
-            onChange={e => setImportCsvText(e.target.value)}
-            className="w-full p-3 border border-slate-300 rounded-lg font-mono text-xs"
-          />
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              onClick={() => setShowImportModal(false)}
-              className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleImportCsv}
-              className="px-5 py-2 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg"
-            >
-              Start Batch Import
-            </button>
-          </div>
-        </div>
       </Modal>
     </div>
   );
