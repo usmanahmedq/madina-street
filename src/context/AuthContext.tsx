@@ -28,21 +28,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const res = await api.getMe();
           if (res.success && res.user) {
             setUser(res.user);
+          } else {
+            removeStoredToken();
           }
         } catch (e) {
           console.warn('Session expired or invalid token', e);
           removeStoredToken();
-        }
-      } else {
-        // Auto-login default Admin for seamless viewing
-        try {
-          const res = await api.login('admin@madinastreet.org', 'Administrator');
-          if (res.success) {
-            setStoredToken(res.token);
-            setUser(res.user);
-          }
-        } catch (err) {
-          console.error('Auto login fallback failed', err);
         }
       }
       setLoading(false);
@@ -68,7 +59,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     removeStoredToken();
+    localStorage.clear();
     setUser(null);
+    window.location.href = '/login';
   };
 
   const hasRole = (...roles: UserRole[]): boolean => {

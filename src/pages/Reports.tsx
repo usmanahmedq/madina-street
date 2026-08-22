@@ -22,12 +22,23 @@ export const Reports: React.FC = () => {
 
   // Top level active tab
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'houses' | 'collections' | 'defaulters' | 'financial' | 'payroll'
+    'dashboard' | 'closing' | 'houses' | 'collections' | 'defaulters' | 'financial' | 'payroll'
   >('dashboard');
 
   // Sub-tab selectors
   const [houseSubTab, setHouseSubTab] = useState<'directory' | 'statement' | 'sector'>('directory');
-  const [financialSubTab, setFinancialSubTab] = useState<'pnl' | 'categories' | 'ledger' | 'closing'>('pnl');
+  const [financialSubTab, setFinancialSubTab] = useState<'pnl' | 'categories' | 'ledger'>('pnl');
+
+  // Monthly Closing State
+  const [selectedClosingMonth, setSelectedClosingMonth] = useState('August 2026');
+  const [closingReport, setClosingReport] = useState<any>(null);
+  const [closingLoading, setClosingLoading] = useState(false);
+  const [closingActiveTab, setClosingActiveTab] = useState<'paid' | 'unpaid' | 'expenses' | 'salaries'>('paid');
+
+  const monthsList = [
+    'January 2026', 'February 2026', 'March 2026', 'April 2026',
+    'May 2026', 'June 2026', 'July 2026', 'August 2026', 'September 2026'
+  ];
 
   // Master State
   const [houses, setHouses] = useState<House[]>([]);
@@ -42,11 +53,9 @@ export const Reports: React.FC = () => {
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
   const [sectorFilter, setSectorFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedHouseId, setSelectedHouseId] = useState<string>('');
   const [duesThreshold, setDuesThreshold] = useState<number>(0);
   const [collectionTimeframe, setCollectionTimeframe] = useState<'ALL' | 'TODAY' | 'MONTH' | 'YEAR'>('ALL');
-  const [closingDate, setClosingDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Data Fetching
   const fetchData = async () => {
@@ -80,19 +89,42 @@ export const Reports: React.FC = () => {
     }
   };
 
+  const fetchMonthlyClosing = async (month: string) => {
+    setClosingLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:3000/api/reports/monthly-closing?month=${encodeURIComponent(month)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClosingReport(data);
+      }
+    } catch (err) {
+      console.error('Failed to load monthly closing data', err);
+    } finally {
+      setClosingLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'closing') {
+      fetchMonthlyClosing(selectedClosingMonth);
+    }
+  }, [activeTab, selectedClosingMonth]);
 
   // Log report access audit
   useEffect(() => {
     api.logAction('VIEW', 'Reports & Analytics', `Accessed ${activeTab.toUpperCase()} report tab`).catch(() => {});
   }, [activeTab]);
 
-  // ==========================================
   // CALCULATED METRICS
-  // ==========================================
-
   const totalHouses = houses.length;
   const activeHouses = houses.filter(h => h.status === 'Active').length;
   const closedHouses = houses.filter(h => h.status === 'Closed' || h.status === 'Suspended').length;
@@ -115,7 +147,6 @@ export const Reports: React.FC = () => {
 
   const defaulterTotalDues = defaultersList.reduce((s, h) => s + h.currentDues, 0);
 
-  // Sector list for dropdowns
   const sectors = useMemo(() => {
     const set = new Set<string>();
     houses.forEach(h => {
@@ -124,7 +155,6 @@ export const Reports: React.FC = () => {
     return Array.from(set);
   }, [houses]);
 
-  // Selected House Statement details
   const selectedHouseProfile = useMemo(() => {
     if (!selectedHouseId) return null;
     const h = houses.find(house => house.id === selectedHouseId);
@@ -141,7 +171,6 @@ export const Reports: React.FC = () => {
     };
   }, [selectedHouseId, houses, collections]);
 
-  // Filtered Defaulters
   const filteredDefaulters = useMemo(() => {
     return defaultersList.filter(h => {
       const matchSearch =
@@ -154,7 +183,6 @@ export const Reports: React.FC = () => {
     });
   }, [defaultersList, searchQuery, sectorFilter, duesThreshold]);
 
-  // Filtered Collections
   const filteredCollections = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const currentMonthStr = todayStr.slice(0, 7);
@@ -177,7 +205,6 @@ export const Reports: React.FC = () => {
     });
   }, [collections, collectionTimeframe, searchQuery]);
 
-  // Collector Summary
   const collectorSummary = useMemo(() => {
     const map: Record<string, { count: number; total: number; cash: number; bank: number; online: number }> = {};
     filteredCollections.forEach(c => {
@@ -196,7 +223,6 @@ export const Reports: React.FC = () => {
     })).sort((a, b) => b.total - a.total);
   }, [filteredCollections]);
 
-  // Payment Method Breakdown
   const paymentMethodSummary = useMemo(() => {
     const map: Record<string, number> = { Cash: 0, 'Bank Transfer': 0, 'JazzCash / EasyPaisa': 0, Online: 0 };
     filteredCollections.forEach(c => {
@@ -206,7 +232,6 @@ export const Reports: React.FC = () => {
     return Object.entries(map).map(([method, amount]) => ({ method, amount }));
   }, [filteredCollections]);
 
-  // Expense Category Breakdown
   const expenseCategoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
     expenses.forEach(e => {
@@ -224,7 +249,6 @@ export const Reports: React.FC = () => {
     })).sort((a, b) => b.amount - a.amount);
   }, [expenses, totalSalaries]);
 
-  // Sector Recovery Summary Table
   const sectorRecoverySummary = useMemo(() => {
     const map: Record<string, { houses: number; expected: number; collected: number; dues: number }> = {};
     houses.forEach(h => {
@@ -252,7 +276,6 @@ export const Reports: React.FC = () => {
     });
   }, [houses, collections]);
 
-  // Trend Data for Charts
   const trendChartData = useMemo(() => {
     return [
       { month: 'Mar 2026', Income: 42000, Expenses: 31000 },
@@ -266,13 +289,11 @@ export const Reports: React.FC = () => {
 
   const chartColors = ['#0f766e', '#2563eb', '#d97706', '#dc2626', '#8b5cf6', '#06b6d4'];
 
-  // Print Report Handler
   const handlePrint = async () => {
     await api.logAction('PRINT', 'Reports Module', `Printed report page for tab ${activeTab.toUpperCase()}`);
     window.print();
   };
 
-  // Export PDF Defaulters Notice
   const handleExportDefaultersPdf = async () => {
     const headers = ['House #', 'Resident Head', 'Sector', 'Phone', 'Monthly Fee', 'Current Dues', 'Status'];
     const rows = filteredDefaulters.map(d => [
@@ -296,7 +317,6 @@ export const Reports: React.FC = () => {
     await api.logAction('EXPORT', 'Defaulters Report', `Exported PDF report for ${filteredDefaulters.length} defaulter houses`);
   };
 
-  // Export PDF House Directory
   const handleExportHouseDirectoryPdf = async () => {
     const headers = ['House #', 'Resident Name', 'CNIC', 'Mobile', 'Sector', 'Category', 'Monthly Fee', 'Dues', 'Status'];
     const rows = houses.map(h => [
@@ -330,7 +350,7 @@ export const Reports: React.FC = () => {
             <Badge variant="teal" size="sm">Live Data</Badge>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Real-time financial analytics, collection rates, house directory audits, defaulters notices, and payroll logs
+            Real-time financial analytics, monthly closing ledger, collection rates, house directory audits, and defaulters notices
           </p>
         </div>
 
@@ -365,6 +385,18 @@ export const Reports: React.FC = () => {
         >
           <BarChart3 className="w-4 h-4" />
           Analytics Dashboard
+        </button>
+
+        <button
+          onClick={() => setActiveTab('closing')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'closing'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Monthly Closing & Audit
         </button>
 
         <button
@@ -433,7 +465,6 @@ export const Reports: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
-          {/* Quick Stats Grid (10 KPI Cards) */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs space-y-1">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Houses</span>
@@ -492,9 +523,7 @@ export const Reports: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Charts Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Income vs Expense Trend */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
               <div className="flex justify-between items-center">
                 <div>
@@ -527,7 +556,6 @@ export const Reports: React.FC = () => {
               </div>
             </div>
 
-            {/* Expense Category Distribution */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
               <div className="flex justify-between items-center">
                 <div>
@@ -562,9 +590,7 @@ export const Reports: React.FC = () => {
             </div>
           </div>
 
-          {/* Sector Efficiency & Collector Performance */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Sector Recovery Efficiency */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
               <h3 className="font-bold text-slate-900 text-sm">Sector Recovery Rate Efficiency (%)</h3>
               <div className="h-60 w-full">
@@ -580,7 +606,6 @@ export const Reports: React.FC = () => {
               </div>
             </div>
 
-            {/* Payment Method Distribution */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
               <h3 className="font-bold text-slate-900 text-sm">Payment Method Inflow Breakdown</h3>
               <div className="h-60 w-full">
@@ -600,11 +625,222 @@ export const Reports: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: HOUSE REPORTS & STATEMENTS                                         */}
+      {/* TAB 2: MONTHLY CLOSING & HISTORICAL AUDIT                                  */}
+      {/* ========================================================================= */}
+      {activeTab === 'closing' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl shadow-xs border border-slate-200">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Month-Wise Financial Closing & Audit Ledger</h2>
+              <p className="text-xs text-slate-500">Historical closing balances, paid receipts, and defaulter house tracking</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-bold text-slate-700">Select Month:</label>
+              <select
+                value={selectedClosingMonth}
+                onChange={(e) => setSelectedClosingMonth(e.target.value)}
+                className="bg-slate-100 border border-slate-300 font-extrabold text-teal-800 text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-teal-600"
+              >
+                {monthsList.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {closingLoading ? (
+            <div className="flex justify-center p-12">
+              <RefreshCw className="w-8 h-8 text-teal-700 animate-spin" />
+            </div>
+          ) : closingReport ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Collected ({selectedClosingMonth})</span>
+                  <p className="text-xl font-extrabold text-emerald-600 mt-1">Rs. {closingReport.summary.totalCollected.toLocaleString()}</p>
+                  <span className="text-xs text-slate-400">{closingReport.summary.paidHousesCount} Paid Houses</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operational Expenses</span>
+                  <p className="text-xl font-extrabold text-rose-600 mt-1">Rs. {closingReport.summary.totalExpenses.toLocaleString()}</p>
+                  <span className="text-xs text-slate-400">{closingReport.expensesList.length} Vouchers</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Staff Payroll</span>
+                  <p className="text-xl font-extrabold text-indigo-600 mt-1">Rs. {closingReport.summary.totalSalaries.toLocaleString()}</p>
+                  <span className="text-xs text-slate-400">{closingReport.salaryPayments.length} Disbursed Slips</span>
+                </div>
+
+                <div className={`p-4 rounded-xl border shadow-2xs ${closingReport.summary.netClosingBalance >= 0 ? 'bg-teal-900 text-white border-teal-800' : 'bg-rose-900 text-white border-rose-800'}`}>
+                  <span className="text-[10px] font-bold uppercase opacity-80 tracking-wider">Net Monthly Surplus</span>
+                  <p className="text-xl font-black mt-1">Rs. {closingReport.summary.netClosingBalance.toLocaleString()}</p>
+                  <span className="text-xs opacity-75">{closingReport.summary.netClosingBalance >= 0 ? 'Monthly Surplus' : 'Monthly Deficit'}</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+                <div className="flex border-b border-slate-200 overflow-x-auto">
+                  <button
+                    onClick={() => setClosingActiveTab('paid')}
+                    className={`px-5 py-3 font-bold text-xs border-b-2 transition-all ${closingActiveTab === 'paid' ? 'border-teal-700 text-teal-700 bg-teal-50' : 'border-transparent text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Paid Houses ({closingReport.paidCollections.length})
+                  </button>
+                  <button
+                    onClick={() => setClosingActiveTab('unpaid')}
+                    className={`px-5 py-3 font-bold text-xs border-b-2 transition-all ${closingActiveTab === 'unpaid' ? 'border-amber-600 text-amber-600 bg-amber-50' : 'border-transparent text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Unpaid / Pending Houses ({closingReport.unpaidHousesList.length})
+                  </button>
+                  <button
+                    onClick={() => setClosingActiveTab('expenses')}
+                    className={`px-5 py-3 font-bold text-xs border-b-2 transition-all ${closingActiveTab === 'expenses' ? 'border-rose-600 text-rose-600 bg-rose-50' : 'border-transparent text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Expenses ({closingReport.expensesList.length})
+                  </button>
+                  <button
+                    onClick={() => setClosingActiveTab('salaries')}
+                    className={`px-5 py-3 font-bold text-xs border-b-2 transition-all ${closingActiveTab === 'salaries' ? 'border-indigo-600 text-indigo-600 bg-indigo-50' : 'border-transparent text-slate-600 hover:text-slate-800'}`}
+                  >
+                    Salaries ({closingReport.salaryPayments.length})
+                  </button>
+                </div>
+
+                <div className="p-4 overflow-x-auto">
+                  {closingActiveTab === 'paid' && (
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-700 font-bold border-b">
+                          <th className="p-3">Receipt #</th>
+                          <th className="p-3">House #</th>
+                          <th className="p-3">Resident Name</th>
+                          <th className="p-3">Payment Date</th>
+                          <th className="p-3">Method</th>
+                          <th className="p-3 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {closingReport.paidCollections.length === 0 ? (
+                          <tr><td colSpan={6} className="text-center p-6 text-slate-400">No payment records found for {selectedClosingMonth}</td></tr>
+                        ) : (
+                          closingReport.paidCollections.map((c: any) => (
+                            <tr key={c.id} className="hover:bg-slate-50">
+                              <td className="p-3 font-mono text-teal-700 font-bold">{c.receiptNo}</td>
+                              <td className="p-3 font-bold text-slate-800">{c.houseNo}</td>
+                              <td className="p-3">{c.headName}</td>
+                              <td className="p-3">{c.paymentDate}</td>
+                              <td className="p-3">{c.paymentMethod}</td>
+                              <td className="p-3 text-right font-bold text-emerald-600">Rs. {c.totalPaid.toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {closingActiveTab === 'unpaid' && (
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-700 font-bold border-b">
+                          <th className="p-3">House #</th>
+                          <th className="p-3">Resident Name</th>
+                          <th className="p-3">Sector / Street</th>
+                          <th className="p-3">Phone</th>
+                          <th className="p-3 text-right">Monthly Fee</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {closingReport.unpaidHousesList.length === 0 ? (
+                          <tr><td colSpan={5} className="text-center p-6 text-emerald-600 font-bold">Awesome! All houses have paid for {selectedClosingMonth}</td></tr>
+                        ) : (
+                          closingReport.unpaidHousesList.map((h: any) => (
+                            <tr key={h.id} className="hover:bg-slate-50">
+                              <td className="p-3 font-bold text-slate-800">{h.houseNo}</td>
+                              <td className="p-3">{h.headName}</td>
+                              <td className="p-3">{h.sector}, {h.street}</td>
+                              <td className="p-3">{h.phone}</td>
+                              <td className="p-3 text-right font-bold text-amber-600">Rs. {h.monthlyFee.toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {closingActiveTab === 'expenses' && (
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-700 font-bold border-b">
+                          <th className="p-3">Voucher #</th>
+                          <th className="p-3">Title</th>
+                          <th className="p-3">Category</th>
+                          <th className="p-3">Paid To</th>
+                          <th className="p-3">Date</th>
+                          <th className="p-3 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {closingReport.expensesList.length === 0 ? (
+                          <tr><td colSpan={6} className="text-center p-6 text-slate-400">No expense vouchers recorded for {selectedClosingMonth}</td></tr>
+                        ) : (
+                          closingReport.expensesList.map((e: any) => (
+                            <tr key={e.id} className="hover:bg-slate-50">
+                              <td className="p-3 font-mono text-rose-700 font-bold">{e.voucherNo}</td>
+                              <td className="p-3 font-semibold text-slate-800">{e.title}</td>
+                              <td className="p-3">{e.category}</td>
+                              <td className="p-3">{e.paidTo}</td>
+                              <td className="p-3">{e.date}</td>
+                              <td className="p-3 text-right font-bold text-rose-600">Rs. {e.amount.toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {closingActiveTab === 'salaries' && (
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-700 font-bold border-b">
+                          <th className="p-3">Slip #</th>
+                          <th className="p-3">Staff Member</th>
+                          <th className="p-3">Role</th>
+                          <th className="p-3">Payment Date</th>
+                          <th className="p-3 text-right">Net Paid</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {closingReport.salaryPayments.length === 0 ? (
+                          <tr><td colSpan={5} className="text-center p-6 text-slate-400">No salary slips disbursed for {selectedClosingMonth}</td></tr>
+                        ) : (
+                          closingReport.salaryPayments.map((s: any) => (
+                            <tr key={s.id} className="hover:bg-slate-50">
+                              <td className="p-3 font-mono text-indigo-700 font-bold">{s.slipNo}</td>
+                              <td className="p-3 font-semibold text-slate-800">{s.staffName}</td>
+                              <td className="p-3">{s.staffRole}</td>
+                              <td className="p-3">{s.paymentDate}</td>
+                              <td className="p-3 text-right font-bold text-indigo-600">Rs. {s.netPaid.toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: HOUSE REPORTS & STATEMENTS                                         */}
       {/* ========================================================================= */}
       {activeTab === 'houses' && (
         <div className="space-y-6">
-          {/* Sub-tab pills */}
           <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl w-fit text-xs font-bold">
             <button
               onClick={() => setHouseSubTab('directory')}
@@ -632,7 +868,6 @@ export const Reports: React.FC = () => {
             </button>
           </div>
 
-          {/* Sub-tab 1: Directory */}
           {houseSubTab === 'directory' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs space-y-4 p-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -709,7 +944,6 @@ export const Reports: React.FC = () => {
             </div>
           )}
 
-          {/* Sub-tab 2: House Statement */}
           {houseSubTab === 'statement' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -768,7 +1002,6 @@ export const Reports: React.FC = () => {
 
               {selectedHouseProfile ? (
                 <div className="space-y-6">
-                  {/* House Info Card */}
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                     <div>
                       <span className="text-[10px] font-bold text-slate-500 uppercase">Resident Head</span>
@@ -797,7 +1030,6 @@ export const Reports: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Payment History Log */}
                   <div className="space-y-3">
                     <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Itemized Collection Receipts</h4>
                     <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -846,7 +1078,6 @@ export const Reports: React.FC = () => {
             </div>
           )}
 
-          {/* Sub-tab 3: Sector Recovery Matrix */}
           {houseSubTab === 'sector' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -899,11 +1130,10 @@ export const Reports: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: COLLECTION REPORTS & ANALYTICS                                     */}
+      {/* TAB 4: COLLECTION REPORTS & ANALYTICS                                    */}
       {/* ========================================================================= */}
       {activeTab === 'collections' && (
         <div className="space-y-6">
-          {/* Controls Header */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xs font-bold text-slate-500 uppercase">Timeframe:</span>
@@ -936,7 +1166,6 @@ export const Reports: React.FC = () => {
             <ExportButton filename="Collection_Analytics_Report" data={filteredCollections} />
           </div>
 
-          {/* Collector Performance Summary Table */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
             <h3 className="font-bold text-slate-900 text-sm">Collector-wise Collection Breakdown</h3>
             <div className="overflow-x-auto">
@@ -967,7 +1196,6 @@ export const Reports: React.FC = () => {
             </div>
           </div>
 
-          {/* Detailed Receipts Table */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
             <h3 className="font-bold text-slate-900 text-sm">Itemized Collection Receipts History</h3>
             <div className="overflow-x-auto">
@@ -1007,11 +1235,10 @@ export const Reports: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: DEFAULTERS & PENDING DUES AUDIT                                   */}
+      {/* TAB 5: DEFAULTERS & PENDING DUES AUDIT                                   */}
       {/* ========================================================================= */}
       {activeTab === 'defaulters' && (
         <div className="space-y-6">
-          {/* Defaulter Banner Stats */}
           <div className="bg-rose-900 text-white p-6 rounded-2xl shadow-xs grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
               <span className="text-xs font-bold text-rose-300 uppercase tracking-wider">Total Defaulters</span>
@@ -1044,7 +1271,6 @@ export const Reports: React.FC = () => {
             </div>
           </div>
 
-          {/* Filters Bar */}
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
@@ -1084,7 +1310,6 @@ export const Reports: React.FC = () => {
             <ExportButton filename="Defaulters_Audit_List" data={filteredDefaulters} />
           </div>
 
-          {/* Defaulters Master Table */}
           <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -1131,11 +1356,10 @@ export const Reports: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 5: FINANCIAL P&L, EXPENSE CATEGORIES & LEDGER                        */}
+      {/* TAB 6: FINANCIAL P&L, EXPENSE CATEGORIES & LEDGER                        */}
       {/* ========================================================================= */}
       {activeTab === 'financial' && (
         <div className="space-y-6">
-          {/* Sub-tab pills */}
           <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl w-fit text-xs font-bold">
             <button
               onClick={() => setFinancialSubTab('pnl')}
@@ -1163,7 +1387,6 @@ export const Reports: React.FC = () => {
             </button>
           </div>
 
-          {/* Sub-tab 1: P&L Statement */}
           {financialSubTab === 'pnl' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
               <div className="flex justify-between items-center border-b border-slate-100 pb-4">
@@ -1211,7 +1434,6 @@ export const Reports: React.FC = () => {
             </div>
           )}
 
-          {/* Sub-tab 2: Expense Categories */}
           {financialSubTab === 'categories' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
               <h3 className="font-bold text-slate-900 text-sm">Categorized Operational Outflow Audit</h3>
@@ -1231,7 +1453,6 @@ export const Reports: React.FC = () => {
             </div>
           )}
 
-          {/* Sub-tab 3: General Ledger */}
           {financialSubTab === 'ledger' && (
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -1279,11 +1500,10 @@ export const Reports: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 6: STAFF PAYROLL & ATTENDANCE REPORTS                                 */}
+      {/* TAB 7: STAFF PAYROLL & ATTENDANCE REPORTS                                 */}
       {/* ========================================================================= */}
       {activeTab === 'payroll' && (
         <div className="space-y-6">
-          {/* Payroll Summary Header */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
             <div>
               <h3 className="font-bold text-slate-900 text-sm">Staff Payroll & Salary Disbursal Audit</h3>
@@ -1292,7 +1512,6 @@ export const Reports: React.FC = () => {
             <ExportButton filename="Payroll_Disbursal_Report" data={salaries} />
           </div>
 
-          {/* Salary Disbursals Table */}
           <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs border-collapse">
               <thead>

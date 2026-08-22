@@ -58,6 +58,7 @@ export const HouseManagement: React.FC = () => {
   const [formMonthlyFee, setFormMonthlyFee] = useState(1500);
   const [formStatus, setFormStatus] = useState<HouseStatus>('Active');
   const [formCurrentDues, setFormCurrentDues] = useState(0);
+  const [formRegistrationMonth, setFormRegistrationMonth] = useState('August 2026');
   const [formNotes, setFormNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -97,12 +98,13 @@ export const HouseManagement: React.FC = () => {
     setFormMonthlyFee(1500);
     setFormStatus('Active');
     setFormCurrentDues(0);
+    setFormRegistrationMonth('August 2026');
     setFormNotes('');
     setFormError(null);
     setShowAddModal(true);
   };
 
-  const openEditModal = (house: House) => {
+  const openEditModal = (house: any) => {
     setEditingHouse(house);
     setFormHouseNo(house.houseNo);
     setFormStreet(house.street);
@@ -117,6 +119,7 @@ export const HouseManagement: React.FC = () => {
     setFormMonthlyFee(house.monthlyFee);
     setFormStatus(house.status);
     setFormCurrentDues(house.currentDues);
+    setFormRegistrationMonth(house.registrationMonth || 'August 2026');
     setFormNotes(house.notes || '');
     setFormError(null);
     setShowAddModal(true);
@@ -129,7 +132,6 @@ export const HouseManagement: React.FC = () => {
   };
 
   const handleCnicChange = (val: string) => {
-    // Auto format CNIC: XXXXX-XXXXXXX-X
     const digits = val.replace(/\D/g, '').slice(0, 13);
     let formatted = digits;
     if (digits.length > 5 && digits.length <= 12) {
@@ -179,6 +181,7 @@ export const HouseManagement: React.FC = () => {
       monthlyFee: Number(formMonthlyFee),
       status: formStatus,
       currentDues: Number(formCurrentDues),
+      registrationMonth: formRegistrationMonth,
       notes: formNotes,
     };
 
@@ -234,7 +237,6 @@ export const HouseManagement: React.FC = () => {
     }
   };
 
-  // Helper for WhatsApp link format
   const cleanPhoneForWhatsapp = (phoneStr: string) => {
     const digits = phoneStr.replace(/\D/g, '');
     if (digits.startsWith('0')) return '92' + digits.substring(1);
@@ -242,10 +244,8 @@ export const HouseManagement: React.FC = () => {
     return '92' + digits;
   };
 
-  // Filtered and Sorted Houses
   const filteredAndSortedHouses = useMemo(() => {
     return houses.filter(h => {
-      // Search term match across HouseNo, HeadName, CNIC, Phone, WhatsApp
       const search = searchTerm.toLowerCase().trim();
       const matchesSearch = !search || (
         h.houseNo.toLowerCase().includes(search) ||
@@ -255,25 +255,19 @@ export const HouseManagement: React.FC = () => {
         (h.whatsapp && h.whatsapp.includes(search))
       );
 
-      // Sector Filter
       const matchesSector = sectorFilter === 'ALL' || h.sector === sectorFilter;
-
-      // Status Filter
       const matchesStatus = statusFilter === 'ALL' || h.status === statusFilter;
 
-      // Fee Range Filter
       let matchesFee = true;
       if (feeRangeFilter === '<1000') matchesFee = h.monthlyFee < 1000;
       else if (feeRangeFilter === '1000-2000') matchesFee = h.monthlyFee >= 1000 && h.monthlyFee <= 2000;
       else if (feeRangeFilter === '2000-5000') matchesFee = h.monthlyFee > 2000 && h.monthlyFee <= 5000;
       else if (feeRangeFilter === '>5000') matchesFee = h.monthlyFee > 5000;
 
-      // Outstanding Dues Filter
       let matchesDues = true;
       if (duesFilter === 'CLEAR') matchesDues = (h.currentDues === 0);
       else if (duesFilter === 'DEFAULTER') matchesDues = (h.currentDues > 0);
 
-      // Date Filter
       let matchesDate = true;
       if (dateFilter === 'TODAY') {
         const todayStr = new Date().toISOString().split('T')[0];
@@ -303,7 +297,6 @@ export const HouseManagement: React.FC = () => {
     });
   }, [houses, searchTerm, sectorFilter, statusFilter, feeRangeFilter, duesFilter, dateFilter, sortField, sortDirection]);
 
-  // Pagination Calculations
   const totalItems = filteredAndSortedHouses.length;
   const totalPages = pageSize === -1 ? 1 : Math.ceil(totalItems / pageSize) || 1;
   const paginatedHouses = useMemo(() => {
@@ -346,7 +339,6 @@ export const HouseManagement: React.FC = () => {
     window.print();
   };
 
-  // Directory Stats
   const activeCount = houses.filter(h => h.status === 'Active' || h.status === 'Good Standing').length;
   const defaulterCount = houses.filter(h => h.currentDues > 0 || h.status === 'Defaulter').length;
   const totalDuesAmount = houses.reduce((sum, h) => sum + (h.currentDues || 0), 0);
@@ -354,7 +346,6 @@ export const HouseManagement: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">House Directory & Master Register</h1>
@@ -403,7 +394,6 @@ export const HouseManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Directory Metrics Overview Banner */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
           <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total Registered Houses</p>
@@ -430,9 +420,7 @@ export const HouseManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Multi-Criteria Search & Filter Controls */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-        {/* Row 1: Search Bar & Clear Button */}
         <div className="flex flex-col md:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -461,7 +449,6 @@ export const HouseManagement: React.FC = () => {
           </button>
         </div>
 
-        {/* Row 2: Filter Select Boxes */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-1">
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sector</label>
@@ -539,7 +526,6 @@ export const HouseManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Houses Data Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -743,7 +729,6 @@ export const HouseManagement: React.FC = () => {
           </table>
         </div>
 
-        {/* Table Footer: Pagination & Item Counter */}
         <div className="p-4 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
           <div className="flex items-center gap-3">
             <span>
@@ -952,7 +937,26 @@ export const HouseManagement: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Registration Start Month</label>
+              <select
+                value={formRegistrationMonth}
+                onChange={e => setFormRegistrationMonth(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white font-semibold text-teal-800"
+              >
+                <option value="January 2026">January 2026</option>
+                <option value="February 2026">February 2026</option>
+                <option value="March 2026">March 2026</option>
+                <option value="April 2026">April 2026</option>
+                <option value="May 2026">May 2026</option>
+                <option value="June 2026">June 2026</option>
+                <option value="July 2026">July 2026</option>
+                <option value="August 2026">August 2026</option>
+                <option value="September 2026">September 2026</option>
+              </select>
+            </div>
+
             <div>
               <label className="block font-bold text-slate-700 mb-1">Family Members Count</label>
               <input

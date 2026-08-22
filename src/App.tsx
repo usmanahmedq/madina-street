@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
 
@@ -46,38 +46,36 @@ export default function App() {
   return (
     <AuthProvider>
       <SettingsProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="houses" element={<HouseManagement />} />
-              <Route path="houses/:id" element={<HouseProfile />} />
-              <Route path="defaulters" element={<DefaultersReport />} />
-              <Route path="collections" element={<MonthlyCollection />} />
-              <Route path="expenses" element={<ExpenseManagement />} />
-              <Route path="staff" element={<StaffManagement />} />
-              <Route path="salaries" element={<SalaryManagement />} />
-              <Route path="attendance" element={<AttendanceSystem />} />
-              <Route path="ledger" element={<AccountsLedger />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="print-receipts" element={<ReceiptPrinting />} />
-              <Route path="users" element={<UserManagement />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="audit-logs" element={<AuditLogsPage />} />
-            </Route>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="houses" element={<HouseManagement />} />
+            <Route path="houses/:id" element={<HouseProfile />} />
+            <Route path="defaulters" element={<DefaultersReport />} />
+            <Route path="collections" element={<MonthlyCollection />} />
+            <Route path="expenses" element={<ExpenseManagement />} />
+            <Route path="staff" element={<StaffManagement />} />
+            <Route path="salaries" element={<SalaryManagement />} />
+            <Route path="attendance" element={<AttendanceSystem />} />
+            <Route path="ledger" element={<AccountsLedger />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="print-receipts" element={<ReceiptPrinting />} />
+            <Route path="users" element={<UserManagement />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
+          </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </SettingsProvider>
     </AuthProvider>
   );
