@@ -34,7 +34,8 @@ export const GlobalHouseSearch: React.FC = () => {
       try {
         const res = await api.quickSearchHouses(query);
         if (res.success) {
-          setResults(res.houses);
+          const sorted = [...res.houses].sort((a, b) => compareHouseNumbers(a.houseNo, b.houseNo));
+          setResults(sorted);
           setIsOpen(true);
         }
       } catch (err) {
@@ -46,6 +47,35 @@ export const GlobalHouseSearch: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [query]);
+
+  const parseHouseSequence = (houseNo: string) => {
+    const match = houseNo.match(/(?:MS-)?([A-Za-z]+)[-_ ]?(\d+)/i);
+    if (!match) {
+      return { sectorIndex: 999, number: Number.MAX_SAFE_INTEGER, fallback: houseNo.toLowerCase() };
+    }
+
+    const sector = match[1].toUpperCase();
+    return {
+      sectorIndex: sector.charCodeAt(0) - 64 || 999,
+      number: Number.parseInt(match[2], 10) || 0,
+      fallback: houseNo.toLowerCase(),
+    };
+  };
+
+  const compareHouseNumbers = (a: string, b: string) => {
+    const left = parseHouseSequence(a);
+    const right = parseHouseSequence(b);
+
+    if (left.sectorIndex !== right.sectorIndex) {
+      return left.sectorIndex - right.sectorIndex;
+    }
+
+    if (left.number !== right.number) {
+      return left.number - right.number;
+    }
+
+    return left.fallback.localeCompare(right.fallback);
+  };
 
   const handleSelect = (houseId: string) => {
     setQuery('');

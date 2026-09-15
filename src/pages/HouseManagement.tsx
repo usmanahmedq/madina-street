@@ -25,6 +25,37 @@ const getPendingMonthsBeforeCurrent = (registrationMonth: string) => {
     : 0;
 };
 
+const parseHouseSequence = (houseNo: string) => {
+  const match = houseNo.match(/(?:MS-)?([A-Za-z]+)[-_ ]?(\d+)/i);
+  if (!match) {
+    return { sectorIndex: 999, number: Number.MAX_SAFE_INTEGER, fallback: houseNo.toLowerCase() };
+  }
+
+  const sector = match[1].toUpperCase();
+  const number = Number.parseInt(match[2], 10) || 0;
+
+  return {
+    sectorIndex: sector.charCodeAt(0) - 64 || 999,
+    number,
+    fallback: houseNo.toLowerCase(),
+  };
+};
+
+const compareHouseNumbers = (a: string, b: string) => {
+  const left = parseHouseSequence(a);
+  const right = parseHouseSequence(b);
+
+  if (left.sectorIndex !== right.sectorIndex) {
+    return left.sectorIndex - right.sectorIndex;
+  }
+
+  if (left.number !== right.number) {
+    return left.number - right.number;
+  }
+
+  return left.fallback.localeCompare(right.fallback);
+};
+
 export const HouseManagement: React.FC = () => {
   const { settings, formatCurrency } = useSettings();
   const [houses, setHouses] = useState<House[]>([]);
@@ -56,7 +87,10 @@ export const HouseManagement: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.getHouses();
-      if (res.success) setHouses(res.houses || []);
+      if (res.success) {
+        const sorted = [...(res.houses || [])].sort((a, b) => compareHouseNumbers(a.houseNo, b.houseNo));
+        setHouses(sorted);
+      }
     } catch (err) {
       console.error('Failed to load houses:', err);
     } finally {
@@ -247,7 +281,8 @@ export const HouseManagement: React.FC = () => {
     }
   };
 
-  const filteredHouses = houses.filter(h => {
+  const sortedHouses = [...houses].sort((a, b) => compareHouseNumbers(a.houseNo, b.houseNo));
+  const filteredHouses = sortedHouses.filter(h => {
     const matchSearch = h.houseNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       h.headName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (h.phone && h.phone.includes(searchTerm));
