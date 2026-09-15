@@ -1,4 +1,9 @@
+import 'dotenv/config';
 import fs from 'fs';
+import { Pool } from 'pg';
+import { RelationalStore, MIGRATION_ID, STORAGE_LOCK } from './relational-store';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import {
   User, CustomRole, SystemNotification, BackupHistoryItem, LoginHistoryRecord,
@@ -997,13 +1002,97 @@ const initialAuditLogs: AuditLog[] = [
   }
 ];
 
-class JsonDatabase {
-  private data: DatabaseSchema;
+class Database {
+  private localData!: DatabaseSchema;
+  private context = new AsyncLocalStorage<{ data: DatabaseSchema; dirty: boolean }>();
+  private pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000, enableChannelBinding: true }) : undefined;
+  private relational = new RelationalStore();
+
+  private get data(): DatabaseSchema { return this.context.getStore()?.data ?? this.localData; }
+  private set data(value: DatabaseSchema) { this.localData = value; }
 
   constructor() {
-    this.ensureDirectory();
-    this.data = this.loadData();
+    if (!this.pool) {
+      this.ensureDirectory();
+      this.data = this.loadData();
+    }
   }
+
+  public async initialize() {
+    if (!this.pool) return;
+    this.pool.on('error', () => console.error('Unexpected idle PostgreSQL connection error'));
+    const client = await this.pool.connect();
+    try {
+      const migration = await client.query('SELECT id FROM public.app_schema_migrations WHERE id = $1', [MIGRATION_ID]);
+      if (!migration.rowCount) throw new Error('Run npm run db:migrate before starting the server.');
+      await this.relational.initialize(client);
+    } finally { client.release(); }
+    console.log('PostgreSQL connected: 16 relational tables active');
+  }
+
+  public async close() {
+    await this.pool?.end();
+  }
+
+  // Writes are serialized across servers. Reads use a consistent, read-only snapshot.
+  public middleware = async (_req: Request, res: Response, next: NextFunction) => {
+    if (!this.pool) return next();
+    let client;
+    try {
+      client = await this.pool.connect();
+      const readOnly = ['GET', 'HEAD'].includes(_req.method);
+      await client.query(`${readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN'};
+        SET LOCAL lock_timeout = '15s'; SET LOCAL statement_timeout = '30s'`);
+      if (!readOnly) await client.query('SELECT pg_advisory_xact_lock($1)', [STORAGE_LOCK]);
+      const data = await this.relational.load(client);
+      if (res.destroyed) {
+        await client.query('ROLLBACK');
+        client.release();
+        return;
+      }
+      const previous = structuredClone(data);
+      const state = { data, dirty: false };
+      const end = res.end.bind(res);
+      let ended = false;
+      res.end = ((...args: any[]) => {
+        if (ended) return res;
+        ended = true;
+        void (async () => {
+          try {
+            if (res.statusCode < 400) {
+              if (state.dirty) await this.relational.persist(client!, state.data, previous);
+              await client!.query('COMMIT');
+            } else {
+              await client!.query('ROLLBACK');
+            }
+            (end as any)(...args);
+          } catch (error: any) {
+            await client!.query('ROLLBACK').catch(() => {});
+            console.error('Database transaction failed:', error.code || error.name);
+            res.statusCode = ['23001', '23505', '23503', '23514', '23502', '22P02', '22007', '22008'].includes(error.code) ? 409 : 503;
+            res.removeHeader('Content-Length');
+            res.removeHeader('ETag');
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            end(JSON.stringify({ success: false, message: res.statusCode === 409 ? 'Record conflicts with existing data or contains invalid values.' : 'Database operation failed. Please retry.' }));
+          } finally { client!.release(); }
+        })();
+        return res;
+      }) as Response['end'];
+      res.on('close', () => {
+        if (!ended) {
+          ended = true;
+          void client!.query('ROLLBACK').catch(() => {}).finally(() => client!.release());
+        }
+      });
+      this.context.run(state, next);
+    } catch {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => {});
+        client.release();
+      }
+      res.status(503).json({ success: false, message: 'Database unavailable. Please retry.' });
+    }
+  };
 
   private ensureDirectory() {
     if (!fs.existsSync(DATA_DIR)) {
@@ -1080,6 +1169,12 @@ class JsonDatabase {
   }
 
   public save() {
+    if (this.pool) {
+      const state = this.context.getStore();
+      if (!state) throw new Error('Database writes require an API request transaction');
+      state.dirty = true;
+      return;
+    }
     this.saveDataDirect(this.data);
   }
 
@@ -1156,4 +1251,4 @@ class JsonDatabase {
   }
 }
 
-export const db = new JsonDatabase();
+export const db = new Database();

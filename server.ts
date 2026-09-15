@@ -1,10 +1,13 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import { createServer as createHttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
+import { registerModuleRoutes } from './server/module-routes';
 import { User, House, Collection, Expense, Staff, SalaryPayment, AttendanceRecord, LedgerEntry, MohallaSettings } from './src/types/index';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'madina-street-super-secret-jwt-key-2026';
@@ -40,7 +43,7 @@ const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) 
   }
 };
 
-app.use(authenticateToken);
+app.use('/api', db.middleware, authenticateToken);
 
 // ==========================================
 // 1. AUTHENTICATION & USER ROUTES
@@ -114,7 +117,18 @@ const EVALUATION_MONTHS = [
   'June 2026',
   'July 2026',
   'August 2026',
+  'September 2026',
+  'October 2026',
+  'November 2026',
+  'December 2026',
 ];
+
+const currentEvaluationMonthIndex = () => {
+  const now = new Date();
+  return now.getFullYear() === 2026 ? now.getMonth() : EVALUATION_MONTHS.length - 1;
+};
+
+const currentEvaluationMonth = () => EVALUATION_MONTHS[currentEvaluationMonthIndex()];
 
 function calculateHouseSummary(house: House & { registrationMonth?: string }, allCollections: Collection[]) {
   const houseCols = allCollections
@@ -124,18 +138,27 @@ function calculateHouseSummary(house: House & { registrationMonth?: string }, al
   const paidMonthsSet = new Set(houseCols.map(c => c.month.trim()));
   const paidMonthsList = Array.from(paidMonthsSet);
 
-  const regMonth = house.registrationMonth || 'August 2026';
+  const regMonth = house.registrationMonth || currentEvaluationMonth();
   const regIndex = EVALUATION_MONTHS.findIndex(m => m.toLowerCase() === regMonth.toLowerCase());
-  const applicableMonths = regIndex !== -1 ? EVALUATION_MONTHS.slice(regIndex) : EVALUATION_MONTHS;
+  const currentMonthIndex = currentEvaluationMonthIndex();
+  const applicableMonths = regIndex !== -1 && regIndex < currentMonthIndex
+    ? EVALUATION_MONTHS.slice(regIndex, currentMonthIndex)
+    : [];
 
   let pendingMonthsList: string[] = [];
   if (house.status !== 'Vacant' && house.status !== 'Exempted') {
     pendingMonthsList = applicableMonths.filter(m => !paidMonthsSet.has(m));
   }
 
+  if (house.currentDuesOverride) {
+    pendingMonthsList = [];
+  }
+
   const totalPaidAmount = houseCols.reduce((sum, c) => sum + (c.totalPaid || c.amount || 0), 0);
   const totalExpectedAmount = applicableMonths.length * house.monthlyFee;
-  const outstandingAmount = pendingMonthsList.length * house.monthlyFee;
+  const outstandingAmount = house.currentDuesOverride
+    ? Number(house.currentDues) || 0
+    : pendingMonthsList.length * house.monthlyFee;
   const collectionPercentage = totalExpectedAmount > 0
     ? Math.min(100, Math.round((totalPaidAmount / totalExpectedAmount) * 100))
     : 100;
@@ -408,7 +431,8 @@ app.post('/api/houses', (req: AuthRequest, res: Response) => {
     monthlyFee: fee,
     status: status || 'Active',
     currentDues: Number(currentDues) || 0,
-    registrationMonth: registrationMonth || 'August 2026',
+    currentDuesOverride: Boolean(req.body.currentDuesOverride),
+    registrationMonth: registrationMonth || currentEvaluationMonth(),
     joinedDate: nowIso.split('T')[0],
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -424,6 +448,65 @@ app.post('/api/houses', (req: AuthRequest, res: Response) => {
   res.json({ success: true, house: newHouse });
 });
 
+app.post('/api/houses/import', (req: AuthRequest, res: Response) => {
+  const houses = db.get('houses');
+  const importedHouses = Array.isArray(req.body.importedHouses) ? req.body.importedHouses : [];
+
+  if (importedHouses.length === 0) {
+    return res.status(400).json({ success: false, message: 'No house records were provided.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  const existingNumbers = new Set(houses.map(h => h.houseNo.toLowerCase().trim()));
+  const newHouses: House[] = [];
+  const errors: string[] = [];
+
+  importedHouses.forEach((item: Partial<House>, index: number) => {
+    const houseNo = String(item.houseNo || '').trim();
+    const headName = String(item.headName || '').trim();
+    const phone = String(item.phone || '').trim();
+    const monthlyFee = Number(item.monthlyFee);
+    const normalizedNumber = houseNo.toLowerCase();
+
+    if (!houseNo || !headName || !phone || !Number.isFinite(monthlyFee) || monthlyFee <= 0) {
+      errors.push(`Row ${index + 2}: house number, resident name, phone, and positive monthly fee are required.`);
+      return;
+    }
+    if (existingNumbers.has(normalizedNumber)) {
+      errors.push(`Row ${index + 2}: house number '${houseNo}' already exists.`);
+      return;
+    }
+
+    existingNumbers.add(normalizedNumber);
+    newHouses.push({
+      id: `h-${Date.now()}-${index}`,
+      houseNo: houseNo.toUpperCase(),
+      street: 'Street 1',
+      sector: 'Sector A',
+      category: 'Residential Standard',
+      residentType: 'Owner',
+      headName,
+      phone,
+      whatsapp: phone,
+      familyMembers: 4,
+      monthlyFee,
+      status: item.status || 'Active',
+      currentDues: Number(item.currentDues) || 0,
+      currentDuesOverride: false,
+      registrationMonth: item.registrationMonth || currentEvaluationMonth(),
+      joinedDate: nowIso.split('T')[0],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      isDeleted: false,
+      notes: '',
+    });
+  });
+
+  houses.unshift(...newHouses);
+  db.save();
+  res.json({ success: true, addedCount: newHouses.length, errors });
+});
+
 app.put('/api/houses/:id', (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const houses = db.get('houses');
@@ -436,6 +519,14 @@ app.put('/api/houses/:id', (req: AuthRequest, res: Response) => {
   houses[index] = {
     ...houses[index],
     ...req.body,
+    ...(Object.prototype.hasOwnProperty.call(req.body, 'currentDues')
+      ? {
+        currentDues: Number(req.body.currentDues) || 0,
+        currentDuesOverride: req.body.currentDuesOverride === undefined
+          ? true
+          : Boolean(req.body.currentDuesOverride),
+      }
+      : {}),
     updatedAt: new Date().toISOString(),
   };
 
@@ -500,6 +591,7 @@ app.post('/api/collections', (req: AuthRequest, res: Response) => {
   };
 
   collections.unshift(newCollection);
+  house.currentDuesOverride = false;
   db.save();
 
   res.json({ success: true, collection: newCollection, message: `Payment received! Receipt #${receiptNo}` });
@@ -534,6 +626,11 @@ app.post('/api/expenses', (req: AuthRequest, res: Response) => {
     createdAt: new Date().toISOString(),
   };
 
+  const categories = db.get('expenseCategories') || [];
+  if (!categories.some(c => c.name === newExpense.category)) {
+    categories.push({ id: `category-${Date.now()}`, name: newExpense.category });
+    db.set('expenseCategories', categories);
+  }
   expenses.unshift(newExpense);
   db.save();
 
@@ -625,11 +722,46 @@ app.post('/api/users', (req: AuthRequest, res: Response) => {
   res.json({ success: true, user: newUser });
 });
 
+// ==========================================
+// 8. SETTINGS
+// ==========================================
+
+app.get('/api/settings', (req: AuthRequest, res: Response) => {
+  res.json({ success: true, settings: db.get('settings') });
+});
+
+app.put('/api/settings', (req: AuthRequest, res: Response) => {
+  const currentSettings = db.get('settings');
+  const updatedSettings: MohallaSettings = {
+    ...currentSettings,
+    ...req.body,
+  };
+
+  db.set('settings', updatedSettings);
+  db.logAudit(
+    req.user || db.get('users')[0],
+    'SETTINGS_CHANGE',
+    'Settings',
+    'System settings updated',
+  );
+
+  res.json({ success: true, settings: updatedSettings });
+});
+
+registerModuleRoutes(app);
+app.use('/api', (_req, res) => res.status(404).json({ success: false, message: 'API endpoint not found.' }));
+
 // Vite Development Integration
 async function startServer() {
+  await db.initialize();
+  const httpServer = createHttpServer(app);
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -641,9 +773,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Madina Street ERP Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch(() => {
+  console.error('Server startup failed. Check database connectivity and configuration.');
+  process.exit(1);
+});

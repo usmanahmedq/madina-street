@@ -81,7 +81,7 @@ export const api = {
   createHouse: (data: Partial<House>) => fetchApi<{ success: boolean; house: House }>('/api/houses', { method: 'POST', body: JSON.stringify(data) }),
   updateHouse: (id: string, data: Partial<House>) => fetchApi<{ success: boolean; house: House }>(`/api/houses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteHouse: (id: string) => fetchApi<{ success: boolean }>(`/api/houses/${id}`, { method: 'DELETE' }),
-  importHouses: (importedHouses: Partial<House>[]) => fetchApi<{ success: boolean; addedCount: number }>('/api/houses/import', { method: 'POST', body: JSON.stringify({ importedHouses }) }),
+  importHouses: (importedHouses: Partial<House>[]) => fetchApi<{ success: boolean; addedCount: number; errors?: string[] }>('/api/houses/import', { method: 'POST', body: JSON.stringify({ importedHouses }) }),
 
   // Collections
   getCollections: () => fetchApi<{ success: boolean; collections: Collection[] }>('/api/collections'),

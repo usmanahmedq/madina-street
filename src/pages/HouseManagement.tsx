@@ -1,14 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { House } from '../types/index';
 import { useSettings } from '../context/SettingsContext';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { ExportButton } from '../components/common/ExportButton';
 import { 
   Home, Plus, Search, Filter, Edit2, Trash2, MessageSquare, 
   Phone, User, Shield, AlertCircle, CheckCircle, RefreshCw,
-  ExternalLink, Building
+  ExternalLink, Building, Upload, Download
 } from 'lucide-react';
+
+const REGISTRATION_MONTHS = [
+  'January 2026', 'February 2026', 'March 2026', 'April 2026',
+  'May 2026', 'June 2026', 'July 2026', 'August 2026',
+  'September 2026', 'October 2026', 'November 2026', 'December 2026',
+];
+
+const getPendingMonthsBeforeCurrent = (registrationMonth: string) => {
+  const registrationIndex = REGISTRATION_MONTHS.indexOf(registrationMonth);
+  const currentIndex = new Date().getFullYear() === 2026 ? new Date().getMonth() : 0;
+  return registrationIndex >= 0 && registrationIndex < currentIndex
+    ? currentIndex - registrationIndex
+    : 0;
+};
 
 export const HouseManagement: React.FC = () => {
   const { settings, formatCurrency } = useSettings();
@@ -17,6 +32,7 @@ export const HouseManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sectorFilter, setSectorFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Modal States
   const [showModal, setShowModal] = useState(false);
@@ -32,6 +48,7 @@ export const HouseManagement: React.FC = () => {
   const [category, setCategory] = useState('Residential 100 Sq Yd');
   const [monthlyFee, setMonthlyFee] = useState<number>(1000);
   const [currentDues, setCurrentDues] = useState<number>(0);
+  const [registrationMonth, setRegistrationMonth] = useState('September 2026');
   const [status, setStatus] = useState<'Active' | 'Closed' | 'Defaulter' | 'Suspended'>('Active');
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,6 +68,73 @@ export const HouseManagement: React.FC = () => {
     fetchData();
   }, []);
 
+  const downloadImportTemplate = () => {
+    const headers = ['House Number', 'Resident Head Name', 'Mobile / WhatsApp Number', 'Monthly Tariff Fee', 'Registration Month', 'Account Status'];
+    const example = ['B-02', 'Muhammad Farooq', '03001234567', '4000', 'August 2026', 'Active'];
+    const csv = [headers, example].map(row => row.map(value => `"${value}"`).join(',')).join('\n');
+    const link = document.createElement('a');
+    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+    link.download = 'House_Import_Template.csv';
+    link.click();
+  };
+
+  const parseCsvLine = (line: string) => {
+    const values: string[] = [];
+    let value = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (character === '"' && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = !quoted;
+      } else if (character === ',' && !quoted) {
+        values.push(value.trim());
+        value = '';
+      } else {
+        value += character;
+      }
+    }
+    values.push(value.trim());
+    return values;
+  };
+
+  const handleImportHouses = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const rows = (await file.text()).split(/\r?\n/).filter(row => row.trim());
+      if (rows.length < 2) throw new Error('CSV file must include a header and at least one house row.');
+      const headers = parseCsvLine(rows[0]).map(header => header.toLowerCase());
+      const getValue = (values: string[], ...names: string[]) => {
+        const index = names.map(name => headers.indexOf(name.toLowerCase())).find(index => index >= 0);
+        return index === undefined ? '' : values[index] || '';
+      };
+
+      const importedHouses = rows.slice(1).map(row => {
+        const values = parseCsvLine(row);
+        return {
+          houseNo: getValue(values, 'house number', 'house no'),
+          headName: getValue(values, 'resident head name', 'head name'),
+          phone: getValue(values, 'mobile / whatsapp number', 'phone', 'mobile'),
+          monthlyFee: Number(getValue(values, 'monthly tariff fee', 'monthly fee')),
+          registrationMonth: getValue(values, 'registration month'),
+          status: getValue(values, 'account status', 'status') || 'Active',
+        };
+      });
+
+      const result = await api.importHouses(importedHouses);
+      await fetchData();
+      const errorMessage = result.errors?.length ? `\n\nSkipped rows:\n${result.errors.join('\n')}` : '';
+      alert(`${result.addedCount} house record(s) imported successfully.${errorMessage}`);
+    } catch (error: any) {
+      alert(error.message || 'Failed to import house CSV file.');
+    }
+  };
+
   const openAddModal = () => {
     setEditingHouse(null);
     setHouseNo('');
@@ -62,6 +146,7 @@ export const HouseManagement: React.FC = () => {
     setCategory('Residential 100 Sq Yd');
     setMonthlyFee(1000);
     setCurrentDues(0);
+    setRegistrationMonth('September 2026');
     setStatus('Active');
     setShowModal(true);
   };
@@ -77,6 +162,7 @@ export const HouseManagement: React.FC = () => {
     setCategory(h.category || 'Residential');
     setMonthlyFee(h.monthlyFee || 0);
     setCurrentDues(h.currentDues || 0);
+    setRegistrationMonth(h.registrationMonth || 'September 2026');
     setStatus(h.status || 'Active');
     setShowModal(true);
   };
@@ -94,7 +180,9 @@ export const HouseManagement: React.FC = () => {
         street,
         category,
         monthlyFee: Number(monthlyFee),
-        currentDues: Number(currentDues),
+        currentDues: Number(monthlyFee) * getPendingMonthsBeforeCurrent(registrationMonth),
+        currentDuesOverride: false,
+        registrationMonth,
         status,
       };
 
@@ -145,6 +233,20 @@ export const HouseManagement: React.FC = () => {
     window.open(whatsappUrl, '_blank');
   };
 
+  const handleDeleteHouse = async (house: House) => {
+    const confirmed = window.confirm(
+      `Delete house ${house.houseNo} (${house.headName})? This will remove the house record.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.deleteHouse(house.id);
+      await fetchData();
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete house record.');
+    }
+  };
+
   const filteredHouses = houses.filter(h => {
     const matchSearch = h.houseNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       h.headName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -170,13 +272,43 @@ export const HouseManagement: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Add New House
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" onChange={handleImportHouses} className="hidden" />
+          <button
+            onClick={() => importInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Import CSV
+          </button>
+          <button
+            onClick={downloadImportTemplate}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Template
+          </button>
+          <ExportButton
+            filename="House_Directory"
+            label="Export CSV"
+            data={houses.map(h => ({
+              'House Number': h.houseNo,
+              'Resident Head Name': h.headName,
+              'Mobile / WhatsApp Number': h.phone,
+              'Monthly Tariff Fee': h.monthlyFee,
+              'Registration Month': h.registrationMonth || '',
+              'Account Status': h.status,
+              'Current Pending Dues': h.currentDues,
+            }))}
+          />
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add New House
+          </button>
+        </div>
       </div>
 
       {/* Filters and Search Bar */}
@@ -293,6 +425,13 @@ export const HouseManagement: React.FC = () => {
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => handleDeleteHouse(h)}
+                        className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete House Record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -349,52 +488,13 @@ export const HouseManagement: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">CNIC Number</label>
-              <input
-                type="text"
-                placeholder="42101-1234567-1"
-                value={cnic}
-                onChange={e => setCnic(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Sector *</label>
-              <input
-                type="text"
-                required
-                placeholder="Sector A"
-                value={sector}
-                onChange={e => setSector(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Street *</label>
-              <input
-                type="text"
-                required
-                placeholder="Street 5"
-                value={street}
-                onChange={e => setStreet(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Property Category</label>
+              <label className="block font-bold text-slate-700 mb-1">House Registration Month *</label>
               <select
-                value={category}
-                onChange={e => setCategory(e.target.value)}
+                value={registrationMonth}
+                onChange={e => setRegistrationMonth(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold bg-white"
               >
-                <option value="Residential 80 Sq Yd">Residential 80 Sq Yd</option>
-                <option value="Residential 120 Sq Yd">Residential 120 Sq Yd</option>
-                <option value="Residential 240 Sq Yd">Residential 240 Sq Yd</option>
-                <option value="Commercial Shop">Commercial Shop</option>
-                <option value="Plaza / Commercial">Plaza / Commercial</option>
+                {REGISTRATION_MONTHS.map(month => <option key={month} value={month}>{month}</option>)}
               </select>
             </div>
 
@@ -411,13 +511,12 @@ export const HouseManagement: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Current Pending Dues (Rs.)</label>
+              <label className="block font-bold text-slate-700 mb-1">Calculated Pending Dues (Rs.)</label>
               <input
                 type="number"
-                min={0}
-                value={currentDues}
-                onChange={e => setCurrentDues(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-extrabold text-rose-700"
+                value={Number(monthlyFee) * getPendingMonthsBeforeCurrent(registrationMonth)}
+                readOnly
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-extrabold text-rose-700 bg-slate-50"
               />
             </div>
 

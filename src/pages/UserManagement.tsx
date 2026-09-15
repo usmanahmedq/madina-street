@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { User, Role } from '../types/index';
+import { User, CustomRole } from '../types/index';
 import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
@@ -12,7 +12,7 @@ import {
 export const UserManagement: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [roles, setRoles] = useState<CustomRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 

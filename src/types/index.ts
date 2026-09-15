@@ -68,6 +68,8 @@ export interface House {
   monthlyFee: number;
   status: HouseStatus;
   currentDues: number;
+  currentDuesOverride?: boolean;
+  registrationMonth?: string;
   joinedDate: string;
   createdAt?: string;
   updatedAt?: string;
