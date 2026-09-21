@@ -197,12 +197,12 @@ export const ExpenseManagement: React.FC = () => {
   };
 
   const handleDeleteExpense = async (id: string, voucherNo: string) => {
-    if (!confirm(`Are you sure you want to delete expense voucher ${voucherNo}? This action is irreversible.`)) return;
+    if (!confirm(`Void expense voucher ${voucherNo}? Its history will be retained and it will be excluded from active financial totals.`)) return;
     try {
       await api.deleteExpense(id);
       fetchExpenses();
     } catch (e) {
-      alert('Failed to delete expense record');
+      alert('Failed to void expense record');
     }
   };
 
@@ -402,6 +402,9 @@ export const ExpenseManagement: React.FC = () => {
                   <option value="ALL">All Statuses</option>
                   <option value="Approved">Approved Only</option>
                   <option value="Pending">Pending Approval</option>
+                  <option value="Void">Voided</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="Rejected">Rejected</option>
                 </select>
               </div>
             </div>
@@ -504,7 +507,7 @@ export const ExpenseManagement: React.FC = () => {
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                               <Clock className="w-3 h-3 text-amber-600" />
-                              Pending
+                              {exp.status}
                             </span>
                           )}
                         </td>
@@ -528,7 +531,7 @@ export const ExpenseManagement: React.FC = () => {
                               </button>
                             )}
 
-                            {canManageFinances && (
+                            {canManageFinances && !['Void', 'Cancelled'].includes(exp.status) && (
                               <>
                                 <button
                                   onClick={() => openEditModal(exp)}
@@ -540,7 +543,7 @@ export const ExpenseManagement: React.FC = () => {
                                 <button
                                   onClick={() => handleDeleteExpense(exp.id, exp.voucherNo)}
                                   className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                  title="Delete Voucher"
+                                  title="Void Voucher"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>

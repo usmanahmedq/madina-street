@@ -1,3 +1,4 @@
+import { currentMonth, localDate, monthLabel, monthOptions, monthKey } from '../utils/contributionMonth';
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import { House, Collection, Expense, Staff, SalaryPayment, AttendanceRecord, LedgerEntry } from '../types/index';
@@ -30,16 +31,15 @@ export const Reports: React.FC = () => {
   const [financialSubTab, setFinancialSubTab] = useState<'pnl' | 'categories' | 'ledger'>('pnl');
 
   // Monthly Closing State
-  const [selectedClosingMonth, setSelectedClosingMonth] = useState('August 2026');
+  const [selectedClosingMonth, setSelectedClosingMonth] = useState(monthLabel(currentMonth()));
   const [closingReport, setClosingReport] = useState<any>(null);
   const [closingLoading, setClosingLoading] = useState(false);
   const [closingActiveTab, setClosingActiveTab] = useState<'paid' | 'unpaid' | 'expenses' | 'salaries'>('paid');
 
-  const monthsList = [
-    'January 2026', 'February 2026', 'March 2026', 'April 2026',
-    'May 2026', 'June 2026', 'July 2026', 'August 2026', 'September 2026'
-  ];
+  const monthsList = monthOptions();
 
+  const [houseStatement, setHouseStatement] = useState<any>(null);
+  const [reportSummary, setReportSummary] = useState<any>(null);
   // Master State
   const [houses, setHouses] = useState<House[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -61,7 +61,7 @@ export const Reports: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [hRes, cRes, eRes, sRes, stRes, aRes, lRes] = await Promise.all([
+      const [hRes, cRes, eRes, sRes, stRes, aRes, lRes, rRes] = await Promise.all([
         api.getHouses(),
         api.getCollections(),
         api.getExpenses(),
@@ -69,11 +69,13 @@ export const Reports: React.FC = () => {
         api.getStaff(),
         api.getAttendance(),
         api.getLedger(),
+        api.getReportSummary(),
       ]);
 
+      if (rRes.success) setReportSummary(rRes);
       if (hRes.success) setHouses(hRes.houses);
-      if (cRes.success) setCollections(cRes.collections);
-      if (eRes.success) setExpenses(eRes.expenses);
+      if (cRes.success) setCollections(cRes.collections.filter(c => c.status !== 'Cancelled'));
+      if (eRes.success) setExpenses(eRes.expenses.filter(e => e.status === 'Approved'));
       if (sRes.success) setSalaries(sRes.salaries);
       if (stRes.success) setStaff(stRes.staff);
       if (aRes.success) setAttendance(aRes.attendance);
@@ -92,13 +94,7 @@ export const Reports: React.FC = () => {
   const fetchMonthlyClosing = async (month: string) => {
     setClosingLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:3000/api/reports/monthly-closing?month=${encodeURIComponent(month)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const data = await res.json();
+      const data = await api.getMonthlyClosing(month);
       if (data.success) {
         setClosingReport(data);
       }
@@ -126,18 +122,15 @@ export const Reports: React.FC = () => {
 
   // CALCULATED METRICS
   const totalHouses = houses.length;
-  const activeHouses = houses.filter(h => h.status === 'Active').length;
+  const activeHouses = reportSummary?.stats.activeHouses || 0;
   const closedHouses = houses.filter(h => h.status === 'Closed' || h.status === 'Suspended').length;
 
-  const expectedMonthlyCollection = houses.reduce((s, h) => s + (h.monthlyFee || 0), 0);
-  const totalCollections = collections.reduce((s, c) => s + c.totalPaid, 0);
-  const totalPendingDues = houses.reduce((s, h) => s + (h.currentDues || 0), 0);
-  const collectionPercentage = expectedMonthlyCollection > 0
-    ? Math.round((totalCollections / (totalCollections + totalPendingDues)) * 100)
-    : 100;
-
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-  const totalSalaries = salaries.reduce((s, sal) => s + sal.netPaid, 0);
+  const expectedMonthlyCollection = reportSummary?.stats.expectedMonthlyCollection || 0;
+  const totalCollections = reportSummary?.stats.totalIncome || 0;
+  const totalPendingDues = reportSummary?.stats.outstanding || 0;
+  const collectionPercentage = reportSummary?.stats.collectionPercentage || 0;
+  const totalExpenses = reportSummary?.stats.totalExpenses || 0;
+  const totalSalaries = reportSummary?.stats.totalSalaries || 0;
   const totalOutflow = totalExpenses + totalSalaries;
   const netSurplus = totalCollections - totalOutflow;
 
@@ -155,21 +148,19 @@ export const Reports: React.FC = () => {
     return Array.from(set);
   }, [houses]);
 
-  const selectedHouseProfile = useMemo(() => {
-    if (!selectedHouseId) return null;
-    const h = houses.find(house => house.id === selectedHouseId);
-    if (!h) return null;
-
-    const houseCollections = collections.filter(c => c.houseId === h.id || c.houseNo === h.houseNo);
-    const totalPaid = houseCollections.reduce((s, c) => s + c.totalPaid, 0);
-
-    return {
-      house: h,
-      collections: houseCollections,
-      totalPaid,
-      outstanding: h.currentDues || 0,
-    };
-  }, [selectedHouseId, houses, collections]);
+  useEffect(() => {
+    let active = true;
+    setHouseStatement(null);
+    if (selectedHouseId) api.getHouseProfile(selectedHouseId).then(res => { if(active && res.success) setHouseStatement(res.profile); }).catch(console.error);
+    return () => { active = false; };
+  }, [selectedHouseId, reportSummary]);
+  const selectedHouseProfile = houseStatement ? {
+    house: houseStatement.house,
+    collections: houseStatement.paymentHistory.filter((c: Collection) => c.status !== 'Cancelled'),
+    totalPaid: houseStatement.financialSummary.totalPaidAmount,
+    outstanding: houseStatement.financialSummary.outstandingAmount,
+    summary: houseStatement.financialSummary,
+  } : null;
 
   const filteredDefaulters = useMemo(() => {
     return defaultersList.filter(h => {
@@ -184,7 +175,7 @@ export const Reports: React.FC = () => {
   }, [defaultersList, searchQuery, sectorFilter, duesThreshold]);
 
   const filteredCollections = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDate();
     const currentMonthStr = todayStr.slice(0, 7);
     const currentYearStr = todayStr.slice(0, 4);
 
@@ -192,8 +183,8 @@ export const Reports: React.FC = () => {
       const dateStr = c.paymentDate || c.createdAt.split('T')[0];
       let matchTime = true;
       if (collectionTimeframe === 'TODAY') matchTime = dateStr === todayStr;
-      if (collectionTimeframe === 'MONTH') matchTime = dateStr.startsWith(currentMonthStr);
-      if (collectionTimeframe === 'YEAR') matchTime = dateStr.startsWith(currentYearStr);
+      if (collectionTimeframe === 'MONTH') matchTime = monthKey(c.month, c.year) === currentMonthStr;
+      if (collectionTimeframe === 'YEAR') matchTime = monthKey(c.month, c.year).startsWith(currentYearStr);
 
       const matchSearch =
         c.receiptNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -249,43 +240,8 @@ export const Reports: React.FC = () => {
     })).sort((a, b) => b.amount - a.amount);
   }, [expenses, totalSalaries]);
 
-  const sectorRecoverySummary = useMemo(() => {
-    const map: Record<string, { houses: number; expected: number; collected: number; dues: number }> = {};
-    houses.forEach(h => {
-      const sec = h.sector || 'Unassigned';
-      if (!map[sec]) map[sec] = { houses: 0, expected: 0, collected: 0, dues: 0 };
-      map[sec].houses += 1;
-      map[sec].expected += h.monthlyFee || 0;
-      map[sec].dues += h.currentDues || 0;
-    });
-
-    collections.forEach(c => {
-      const sec = c.sector || 'Unassigned';
-      if (map[sec]) {
-        map[sec].collected += c.totalPaid;
-      }
-    });
-
-    return Object.entries(map).map(([sec, val]) => {
-      const rate = val.expected > 0 ? Math.min(100, Math.round((val.collected / (val.expected || 1)) * 100)) : 100;
-      return {
-        sector: sec,
-        ...val,
-        recoveryRate: rate,
-      };
-    });
-  }, [houses, collections]);
-
-  const trendChartData = useMemo(() => {
-    return [
-      { month: 'Mar 2026', Income: 42000, Expenses: 31000 },
-      { month: 'Apr 2026', Income: 45000, Expenses: 28000 },
-      { month: 'May 2026', Income: 48000, Expenses: 35000 },
-      { month: 'Jun 2026', Income: 43000, Expenses: 29000 },
-      { month: 'Jul 2026', Income: 51000, Expenses: 38000 },
-      { month: 'Aug 2026', Income: totalCollections, Expenses: totalOutflow },
-    ];
-  }, [totalCollections, totalOutflow]);
+  const sectorRecoverySummary = reportSummary?.sectorRecoverySummary || [];
+  const trendChartData = reportSummary?.monthlyTrends.slice(-6) || [];
 
   const chartColors = ['#0f766e', '#2563eb', '#d97706', '#dc2626', '#8b5cf6', '#06b6d4'];
 
@@ -1022,8 +978,8 @@ export const Reports: React.FC = () => {
                             status: selectedHouseProfile.house.status,
                             totalPaid: selectedHouseProfile.totalPaid,
                             outstanding: selectedHouseProfile.outstanding,
-                            collectionRate: 100,
-                            pendingMonths: [],
+                            collectionRate: selectedHouseProfile.summary.collectionPercentage,
+                            pendingMonths: selectedHouseProfile.summary.pendingMonthsList,
                             payments: selectedHouseProfile.collections.map(c => ({
                               receiptNo: c.receiptNo,
                               month: c.month,
@@ -1435,7 +1391,7 @@ export const Reports: React.FC = () => {
                 <div className="flex justify-between items-center border-b border-slate-100 pb-4">
                   <div>
                     <h3 className="text-base font-black text-slate-900">{settings.mohallaName}</h3>
-                    <p className="text-xs text-slate-500">Official Statement of Revenue & Operational Outflows (2026)</p>
+                    <p className="text-xs text-slate-500">Official Statement of Revenue & Operational Outflows (All Contribution Months)</p>
                   </div>
                   <ExportButton filename="Income_Expense_Statement" data={collections} />
                 </div>

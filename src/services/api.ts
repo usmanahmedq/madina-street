@@ -58,6 +58,13 @@ export const api = {
     fetchApi<{
       success: boolean;
       stats: {
+        contributionMonth: string;
+        applicableHouses: number;
+        collectionPosition: { signedAmount: number; amount: number; state: 'outstanding' | 'settled' | 'advance' };
+        paidHouses: number;
+        pendingHouses: number;
+        goodStandingCount: number;
+        warningCount: number;
         totalHouses: number;
         activeHouses: number;
         totalCollectedThisMonth: number;
@@ -69,6 +76,7 @@ export const api = {
         defaulterCount: number;
         expectedMonthlyIncome: number;
       };
+      topDefaulters: Array<{ houseId: string; houseNo: string; headName: string; pendingMonthsCount: number; outstandingAmount: number }>;
       recentCollections: Collection[];
       recentExpenses: Expense[];
     }>('/api/dashboard/stats'),
@@ -84,8 +92,9 @@ export const api = {
   importHouses: (importedHouses: Partial<House>[]) => fetchApi<{ success: boolean; addedCount: number; errors?: string[] }>('/api/houses/import', { method: 'POST', body: JSON.stringify({ importedHouses }) }),
 
   // Collections
+  getMonthlyDues: (month: string) => fetchApi<{ success: boolean; dues: import('../types').MonthlyDue[] }>(`/api/collections/dues?month=${encodeURIComponent(month)}`),
   getCollections: () => fetchApi<{ success: boolean; collections: Collection[] }>('/api/collections'),
-  getCollectionDashboardStats: () => fetchApi<{
+  getCollectionDashboardStats: (month?: string) => fetchApi<{
     success: boolean;
     stats: {
       expectedMonthlyCollection: number;
@@ -104,7 +113,7 @@ export const api = {
     monthlyTrends: Array<{ month: string; collected: number; expected: number; receiptsCount: number }>;
     highestMonth: { month: string; amount: number };
     lowestMonth: { month: string; amount: number };
-  }>('/api/collections/dashboard'),
+  }>(`/api/collections/dashboard${month ? '?month=' + encodeURIComponent(month) : ''}`),
   getDailyCashClosing: (date?: string) => fetchApi<{
     success: boolean;
     date: string;
@@ -165,7 +174,9 @@ export const api = {
   createLedgerEntry: (data: any) => fetchApi<{ success: boolean; entry: LedgerEntry }>('/api/ledger/entry', { method: 'POST', body: JSON.stringify(data) }),
 
   // Reports
-  getReportSummary: () => fetchApi<{ success: boolean; expenseByCategory: Record<string, number>; collectionBySector: Record<string, number>; monthlyTrends: any[] }>('/api/reports/summary'),
+  getMonthlyClosing: (month: string) => fetchApi<any>(`/api/reports/monthly-closing?month=${encodeURIComponent(month)}`),
+  reconcileLedger: () => fetchApi<any>('/api/ledger/reconcile', { method: 'POST' }),
+  getReportSummary: () => fetchApi<any>('/api/reports/summary'),
 
   // Users, Roles & Permissions
   getUsers: () => fetchApi<{ success: boolean; users: User[] }>('/api/users'),

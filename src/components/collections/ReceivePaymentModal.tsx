@@ -1,3 +1,4 @@
+import { currentMonth, monthLabel, monthOptions } from '../../utils/contributionMonth';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { House, PaymentMethod, Collection } from '../../types/index';
@@ -30,9 +31,9 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
 
   // Form states
-  const [month, setMonth] = useState('August 2026');
-  const [year, setYear] = useState<number>(2026);
-  const [amount, setAmount] = useState<number>(1500);
+  const [month, setMonth] = useState(monthLabel(currentMonth()));
+  const [year, setYear] = useState<number>(Number(currentMonth().slice(0,4)));
+  const [amount, setAmount] = useState<number>(0);
   const [lateFee, setLateFee] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
   const [referenceNo, setReferenceNo] = useState('');
@@ -42,11 +43,7 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const monthsList = [
-    'January 2026', 'February 2026', 'March 2026', 'April 2026',
-    'May 2026', 'June 2026', 'July 2026', 'August 2026',
-    'September 2026', 'October 2026', 'November 2026', 'December 2026'
-  ];
+  const monthsList = monthOptions().map(m => m.replace(/\d{4}$/, String(year)));
 
   useEffect(() => {
     if (isOpen) {
@@ -55,6 +52,15 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
       setErrorMessage(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    let active = true;
+    if (selectedHouse && isOpen) api.getMonthlyDues(month).then(res => {
+      const due = res.dues.find(d => d.houseId === selectedHouse.id);
+      if (active && due) setAmount(Math.max(0, due.amount - due.paidAmount));
+    }).catch((e: Error) => { if (active) setErrorMessage(e.message); });
+    return () => { active = false; };
+  }, [selectedHouse?.id, month, isOpen]);
 
   const fetchHouses = async () => {
     try {
@@ -105,18 +111,12 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
       return;
     }
 
-    // Validation: Partial Payment check
-    if (Number(amount) < selectedHouse.monthlyFee) {
-      setErrorMessage(`Partial payments are strictly prohibited. Full monthly fee of ${formatCurrency(selectedHouse.monthlyFee)} is required.`);
-      return;
-    }
-
     setSubmitting(true);
     try {
       const res = await api.createCollection({
         houseId: selectedHouse.id,
         month,
-        year,
+        year: Number(month.slice(-4)),
         amount: Number(amount),
         lateFee: Number(lateFee || 0),
         paymentMethod,
@@ -270,7 +270,7 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
               <input
                 type="number"
                 value={year}
-                onChange={e => setYear(Number(e.target.value))}
+                onChange={e => { const value = Number(e.target.value); setYear(value); setMonth(month.replace(/\d{4}$/, String(value))); }}
                 className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold text-slate-800 focus:ring-2 focus:ring-teal-500"
               />
             </div>

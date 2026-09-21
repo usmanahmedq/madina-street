@@ -40,7 +40,7 @@ try {
   const read = await store.load(client);
   for (const key of Object.keys(TABLES) as (keyof DatabaseSchema)[]) {
     if (key === 'settings') assert.equal(read.settings.receiptFooter, testId);
-    else assert.equal((read[key] as any[]).length, ((original[key] || []) as any[]).length + 1, `${key} insertion`);
+    else assert.equal((read[key] as any[]).length, ((original[key] || []) as any[]).length + (key === 'monthlyDues' ? 0 : 1), `${key} insertion`);
   }
   const readHouse = read.houses.find(h => h.id === house)!;
   assert.equal(readHouse.monthlyFee, 1234.56);

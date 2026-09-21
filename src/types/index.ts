@@ -118,9 +118,12 @@ export interface ExpenseCategoryItem {
   createdAt?: string;
 }
 
-export type ExpenseStatus = 'Pending' | 'Approved' | 'Rejected';
+export type ExpenseStatus = 'Pending' | 'Approved' | 'Rejected' | 'Void' | 'Cancelled';
 
 export interface Expense {
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
   id: string;
   voucherNo: string;
   title: string;
@@ -214,6 +217,12 @@ export interface EmployeeProfileData {
 }
 
 export interface LedgerEntry {
+  expenseId?: string;
+  status?: 'Posted' | 'Voided';
+  voidedAt?: string;
+  collectionId?: string;
+  contributionMonth?: string;
+  reversalOf?: string;
   id: string;
   date: string;
   referenceNo: string;
@@ -225,6 +234,16 @@ export interface LedgerEntry {
   credit: number; // Inflow / Income
   runningBalance: number;
   performedBy: string;
+}
+
+export interface MonthlyDue {
+  id: string;
+  houseId: string;
+  month: string;
+  amount: number;
+  paidAmount: number;
+  status: 'Pending' | 'Partial' | 'Paid';
+  createdAt: string;
 }
 
 export interface FinancialSummaryData {

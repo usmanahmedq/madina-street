@@ -8,12 +8,16 @@ import bcrypt from 'bcryptjs';
 import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
 import { registerModuleRoutes } from './server/module-routes';
+import { registerCollectionRoutes, financeData } from './server/collection-routes';
+import { registerExpenseRoutes } from './server/expense-routes';
+import { mainDashboardSummary } from './server/dashboard-finance';
+import { currentMonth, monthLabel, houseSummary } from './server/collection-finance';
 import { User, House, Collection, Expense, Staff, SalaryPayment, AttendanceRecord, LedgerEntry, MohallaSettings } from './src/types/index';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'madina-street-super-secret-jwt-key-2026';
 const PORT = 3000;
 
-const app = express();
+export const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -107,179 +111,18 @@ app.get('/api/auth/me', (req: AuthRequest, res: Response) => {
   res.json({ success: true, user: req.user });
 });
 
-// Dynamic Evaluation Months
-const EVALUATION_MONTHS = [
-  'January 2026',
-  'February 2026',
-  'March 2026',
-  'April 2026',
-  'May 2026',
-  'June 2026',
-  'July 2026',
-  'August 2026',
-  'September 2026',
-  'October 2026',
-  'November 2026',
-  'December 2026',
-];
+registerCollectionRoutes(app);
+registerExpenseRoutes(app);
 
-const currentEvaluationMonthIndex = () => {
-  const now = new Date();
-  return now.getFullYear() === 2026 ? now.getMonth() : EVALUATION_MONTHS.length - 1;
-};
-
-const currentEvaluationMonth = () => EVALUATION_MONTHS[currentEvaluationMonthIndex()];
-
-function calculateHouseSummary(house: House & { registrationMonth?: string }, allCollections: Collection[]) {
-  const houseCols = allCollections
-    .filter(c => c.houseId === house.id || c.houseNo.toUpperCase().trim() === house.houseNo.toUpperCase().trim())
-    .sort((a, b) => new Date(b.createdAt || b.paymentDate).getTime() - new Date(a.createdAt || a.paymentDate).getTime());
-
-  const paidMonthsSet = new Set(houseCols.map(c => c.month.trim()));
-  const paidMonthsList = Array.from(paidMonthsSet);
-
-  const regMonth = house.registrationMonth || currentEvaluationMonth();
-  const regIndex = EVALUATION_MONTHS.findIndex(m => m.toLowerCase() === regMonth.toLowerCase());
-  const currentMonthIndex = currentEvaluationMonthIndex();
-  const applicableMonths = regIndex !== -1 && regIndex < currentMonthIndex
-    ? EVALUATION_MONTHS.slice(regIndex, currentMonthIndex)
-    : [];
-
-  let pendingMonthsList: string[] = [];
-  if (house.status !== 'Vacant' && house.status !== 'Exempted') {
-    pendingMonthsList = applicableMonths.filter(m => !paidMonthsSet.has(m));
-  }
-
-  if (house.currentDuesOverride) {
-    pendingMonthsList = [];
-  }
-
-  const totalPaidAmount = houseCols.reduce((sum, c) => sum + (c.totalPaid || c.amount || 0), 0);
-  const totalExpectedAmount = applicableMonths.length * house.monthlyFee;
-  const outstandingAmount = house.currentDuesOverride
-    ? Number(house.currentDues) || 0
-    : pendingMonthsList.length * house.monthlyFee;
-  const collectionPercentage = totalExpectedAmount > 0
-    ? Math.min(100, Math.round((totalPaidAmount / totalExpectedAmount) * 100))
-    : 100;
-
-  let statusClassification: 'Good Standing' | 'Warning' | 'Defaulter' | 'Vacant' | 'Exempted' | 'Active' | 'Rented' | 'Closed' = 'Good Standing';
-  if (house.status === 'Vacant' || house.status === 'Exempted' || house.status === 'Closed' || house.status === 'Rented') {
-    statusClassification = house.status;
-  } else if (pendingMonthsList.length === 0) {
-    statusClassification = 'Good Standing';
-  } else if (pendingMonthsList.length === 1) {
-    statusClassification = 'Warning';
-  } else {
-    statusClassification = 'Defaulter';
-  }
-
-  return {
-    totalPaidAmount,
-    totalExpectedAmount,
-    outstandingAmount,
-    paidMonthsCount: paidMonthsList.length,
-    pendingMonthsCount: pendingMonthsList.length,
-    paidMonthsList,
-    pendingMonthsList,
-    collectionPercentage,
-    lastPaymentDate: houseCols[0]?.paymentDate,
-    lastReceiptNo: houseCols[0]?.receiptNo,
-    statusClassification,
-    houseCols,
-  };
-}
+const currentEvaluationMonth = () => monthLabel(currentMonth());
+function calculateHouseSummary(house: House, _collections: Collection[]) { return houseSummary(financeData(), house); }
 
 // ==========================================
 // 2. DASHBOARD STATS ROUTE
 // ==========================================
 
-app.get('/api/dashboard/stats', (req: AuthRequest, res: Response) => {
-  const houses = db.get('houses');
-  const collections = db.get('collections');
-  const expenses = db.get('expenses');
-  const staff = db.get('staff');
-
-  const summaries = houses.map(h => ({
-    house: h,
-    summary: calculateHouseSummary(h, collections),
-  }));
-
-  const totalHouses = houses.length;
-  const activeHouses = houses.filter(h => h.status !== 'Vacant' && h.status !== 'Exempted').length;
-
-  let goodStandingCount = 0;
-  let warningCount = 0;
-  let defaulterCount = 0;
-
-  summaries.forEach(s => {
-    if (s.summary.statusClassification === 'Good Standing') goodStandingCount++;
-    else if (s.summary.statusClassification === 'Warning') warningCount++;
-    else if (s.summary.statusClassification === 'Defaulter') defaulterCount++;
-  });
-
-  const totalCollectedThisMonth = collections
-    .filter(c => c.month.toLowerCase().includes('august 2026') || c.month.toLowerCase().includes('2026-08'))
-    .reduce((sum, c) => sum + c.totalPaid, 0);
-
-  const totalExpensesThisMonth = expenses
-    .filter(e => e.date.startsWith('2026-08'))
-    .reduce((sum, e) => sum + e.amount, 0);
-
-  const pendingCollectionAmount = summaries.reduce((sum, s) => sum + s.summary.outstandingAmount, 0);
-  const totalExpectedAll = summaries.reduce((sum, s) => sum + s.summary.totalExpectedAmount, 0);
-  const totalPaidAll = summaries.reduce((sum, s) => sum + s.summary.totalPaidAmount, 0);
-
-  const netMonthlyBalance = totalCollectedThisMonth - totalExpensesThisMonth;
-
-  const expectedMonthlyIncome = houses
-    .filter(h => h.status !== 'Vacant' && h.status !== 'Exempted')
-    .reduce((sum, h) => sum + h.monthlyFee, 0);
-
-  const collectionRatePercentage = totalExpectedAll > 0
-    ? Math.min(100, Math.round((totalPaidAll / totalExpectedAll) * 100))
-    : 100;
-
-  const pendingCollectionPercentage = 100 - collectionRatePercentage;
-
-  const topDefaulters = [...summaries]
-    .filter(s => s.summary.outstandingAmount > 0)
-    .sort((a, b) => b.summary.outstandingAmount - a.summary.outstandingAmount)
-    .slice(0, 5)
-    .map(s => ({
-      houseId: s.house.id,
-      houseNo: s.house.houseNo,
-      headName: s.house.headName,
-      phone: s.house.phone,
-      monthlyFee: s.house.monthlyFee,
-      pendingMonthsCount: s.summary.pendingMonthsCount,
-      outstandingAmount: s.summary.outstandingAmount,
-      status: s.summary.statusClassification,
-    }));
-
-  res.json({
-    success: true,
-    stats: {
-      totalHouses,
-      activeHouses,
-      totalCollectedThisMonth,
-      totalExpensesThisMonth,
-      netMonthlyBalance,
-      outstandingDuesTotal: pendingCollectionAmount,
-      pendingCollectionAmount,
-      pendingCollectionPercentage,
-      collectionRatePercentage,
-      totalActiveStaff: staff.filter(s => s.status === 'Active').length,
-      goodStandingCount,
-      warningCount,
-      defaulterCount,
-      expectedMonthlyIncome,
-    },
-    topDefaulters,
-    recentlyPaidHouses: collections.slice(0, 5),
-    recentCollections: collections.slice(0, 5),
-    recentExpenses: expenses.slice(0, 5),
-  });
+app.get('/api/dashboard/stats', (_req, res) => {
+  res.json(mainDashboardSummary(financeData()));
 });
 
 // ==========================================
@@ -378,13 +221,13 @@ app.get('/api/houses/:id/profile', (req: AuthRequest, res: Response) => {
   }
 
   const summary = calculateHouseSummary(house, collections);
-  house.status = summary.statusClassification;
-  house.currentDues = summary.outstandingAmount;
+
 
   res.json({
     success: true,
     profile: {
-      house,
+      house: { ...house, status: summary.statusClassification, currentDues: summary.outstandingAmount },
+      timeline: [],
       financialSummary: summary,
       paymentHistory: summary.houseCols,
     },
@@ -551,52 +394,6 @@ app.get('/api/collections', (req: AuthRequest, res: Response) => {
   res.json({ success: true, collections });
 });
 
-app.post('/api/collections', (req: AuthRequest, res: Response) => {
-  const collections = db.get('collections');
-  const houses = db.get('houses');
-
-  const { houseId, month, year, amount, lateFee, paymentMethod, referenceNo, remarks, collectorName } = req.body;
-
-  const house = houses.find(h => h.id === houseId || h.houseNo.toUpperCase() === String(houseId).toUpperCase());
-  if (!house) {
-    return res.status(400).json({ success: false, message: 'Selected house record does not exist.' });
-  }
-
-  const feeAmount = Number(amount || 0);
-  const totalPaid = feeAmount + Number(lateFee || 0);
-  const receiptNo = `REC-${year || 2026}-${String(collections.length + 101).padStart(3, '0')}`;
-
-  const newCollection: Collection = {
-    id: `col-${Date.now()}`,
-    receiptNo,
-    houseId: house.id,
-    houseNo: house.houseNo,
-    headName: house.headName,
-    sector: house.sector,
-    street: house.street,
-    month: month || 'August 2026',
-    year: Number(year) || 2026,
-    amount: feeAmount,
-    lateFee: Number(lateFee || 0),
-    totalPaid,
-    paymentDate: new Date().toISOString().split('T')[0],
-    paymentMethod: paymentMethod || 'Cash',
-    referenceNo: referenceNo || '',
-    collectorId: req.user?.id || 'u-1',
-    collectorName: collectorName || req.user?.name || 'Collector',
-    remarks: remarks || '',
-    notes: remarks || '',
-    status: 'Paid',
-    createdAt: new Date().toISOString(),
-  };
-
-  collections.unshift(newCollection);
-  house.currentDuesOverride = false;
-  db.save();
-
-  res.json({ success: true, collection: newCollection, message: `Payment received! Receipt #${receiptNo}` });
-});
-
 // ==========================================
 // 5. EXPENSE MANAGEMENT ROUTES
 // ==========================================
@@ -606,83 +403,9 @@ app.get('/api/expenses', (req: AuthRequest, res: Response) => {
   res.json({ success: true, expenses });
 });
 
-app.post('/api/expenses', (req: AuthRequest, res: Response) => {
-  const expenses: Expense[] = db.get('expenses') || [];
-  const { title, category, amount, date, paidTo, paymentMethod, notes } = req.body;
-
-  const newExpense: Expense = {
-    id: `exp-${Date.now()}`,
-    voucherNo: `EV-${Date.now().toString().slice(-6)}`,
-    title: title || 'Expense Item',
-    category: category || 'General',
-    amount: Number(amount) || 0,
-    date: date || new Date().toISOString().split('T')[0],
-    paidTo: paidTo || 'Vendor',
-    paymentMethod: paymentMethod || 'Cash',
-    referenceNo: '',
-    createdBy: req.user?.name || 'Admin',
-    status: 'Approved',
-    notes: notes || '',
-    createdAt: new Date().toISOString(),
-  };
-
-  const categories = db.get('expenseCategories') || [];
-  if (!categories.some(c => c.name === newExpense.category)) {
-    categories.push({ id: `category-${Date.now()}`, name: newExpense.category });
-    db.set('expenseCategories', categories);
-  }
-  expenses.unshift(newExpense);
-  db.save();
-
-  res.json({ success: true, expense: newExpense });
-});
-
 // ==========================================
 // 6. MONTHLY CLOSING & HISTORICAL REPORTS
 // ==========================================
-
-app.get('/api/reports/monthly-closing', (req: AuthRequest, res: Response) => {
-  const selectedMonth = (req.query.month as string) || 'August 2026';
-  
-  const collections = (db.get('collections') || []).filter((c: Collection) => 
-    c.month.toLowerCase().trim() === selectedMonth.toLowerCase().trim() && c.status !== 'Cancelled'
-  );
-
-  const expenses = (db.get('expenses') || []).filter((e: Expense) => {
-    return (e.status || 'Approved') === 'Approved';
-  });
-
-  const salaries = (db.get('salaries') || []).filter((s: SalaryPayment) => 
-    s.month.toLowerCase().trim() === selectedMonth.toLowerCase().trim()
-  );
-
-  const houses = db.get('houses') || [];
-
-  const totalCollected = collections.reduce((sum: number, c: Collection) => sum + c.totalPaid, 0);
-  const totalExpenses = expenses.reduce((sum: number, e: Expense) => sum + e.amount, 0);
-  const totalSalaries = salaries.reduce((sum: number, s: SalaryPayment) => sum + s.netPaid, 0);
-  const netClosingBalance = totalCollected - (totalExpenses + totalSalaries);
-
-  const paidHouseIds = new Set(collections.map((c: Collection) => c.houseId));
-  const unpaidHouses = houses.filter((h: House) => h.status !== 'Vacant' && h.status !== 'Exempted' && !paidHouseIds.has(h.id));
-
-  res.json({
-    success: true,
-    month: selectedMonth,
-    summary: {
-      totalCollected,
-      totalExpenses,
-      totalSalaries,
-      netClosingBalance,
-      paidHousesCount: collections.length,
-      unpaidHousesCount: unpaidHouses.length,
-    },
-    paidCollections: collections,
-    expensesList: expenses,
-    salaryPayments: salaries,
-    unpaidHousesList: unpaidHouses,
-  });
-});
 
 // ==========================================
 // 7. USER MANAGEMENT & SYSTEM HEALTH
@@ -778,7 +501,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(() => {
+if (process.env.MADINA_TEST_MODE !== '1') startServer().catch(() => {
   console.error('Server startup failed. Check database connectivity and configuration.');
   process.exit(1);
 });

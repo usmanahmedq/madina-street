@@ -2,6 +2,8 @@ import type { Express, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { db, type DatabaseSchema } from './db';
 import type { User } from '../src/types';
+import { financeData } from './collection-routes';
+import { reconcile, validPayment, contribution, currentMonth } from './collection-finance';
 
 type AuthRequest = Request & { user?: User };
 const id = (prefix: string) => `${prefix}-${randomUUID()}`;
@@ -13,7 +15,7 @@ export function registerModuleRoutes(app: Express) {
   const reads: [string, keyof DatabaseSchema, string][] = [
     ['/api/roles', 'roles', 'roles'], ['/api/staff/designations', 'designations', 'designations'],
     ['/api/staff', 'staff', 'staff'], ['/api/salaries', 'salaries', 'salaries'],
-    ['/api/attendance', 'attendance', 'attendance'], ['/api/ledger', 'ledger', 'ledger'],
+    ['/api/attendance', 'attendance', 'attendance'],
     ['/api/expense-categories', 'expenseCategories', 'categories'],
     ['/api/notifications', 'notifications', 'notifications'], ['/api/audit-logs', 'auditLogs', 'auditLogs'],
     ['/api/system/login-history', 'loginHistory', 'loginHistory'], ['/api/system/backups', 'backupHistory', 'backups'],
@@ -35,7 +37,6 @@ export function registerModuleRoutes(app: Express) {
   }
   update('/api/users/:id', 'users', 'user', ['name', 'email', 'username', 'role', 'status', 'phone', 'avatar', 'permissions']);
   update('/api/staff/:id', 'staff', 'staff', ['name', 'fatherName', 'cnic', 'phone', 'emergencyContact', 'address', 'role', 'joiningDate', 'monthlySalary', 'status', 'notes', 'photoUrl']);
-  update('/api/expenses/:id', 'expenses', 'expense', ['title', 'category', 'amount', 'date', 'paidTo', 'paymentMethod', 'referenceNo', 'receiptAttachmentUrl', 'notes']);
   update('/api/roles/:id', 'roles', 'role', ['name', 'description', 'permissions']);
 
   for (const [route, key, field, responseKey] of [
@@ -114,20 +115,13 @@ export function registerModuleRoutes(app: Express) {
   app.post('/api/attendance', (req, res) => attendance(req, res, false));
   app.post('/api/attendance/mark-all', (req, res) => attendance(req, res, true));
 
-  app.post('/api/expenses/:id/approve', (req: AuthRequest, res) => {
-    const expense = db.get('expenses').find(e => e.id === req.params.id);
-    if (!expense) return fail(res, 'Expense not found.', 404);
-    expense.status = 'Approved'; expense.approvedBy = req.user?.name; expense.updatedAt = now();
-    db.save(); res.json({ success: true, expense });
-  });
-  app.delete('/api/expenses/:id', (req, res) => {
-    db.set('expenses', db.get('expenses').filter(e => e.id !== req.params.id));
-    res.json({ success: true });
-  });
   app.post('/api/collections/:id/cancel', (req: AuthRequest, res) => {
     const collection = db.get('collections').find(c => c.id === req.params.id);
     if (!collection) return fail(res, 'Collection not found.', 404);
     collection.status = 'Cancelled'; collection.cancelledBy = req.user?.name; collection.cancelledReason = req.body.reason || ''; collection.cancelledAt = now();
+    const data = financeData();
+    reconcile(data);
+    db.set('monthlyDues', data.monthlyDues);
     db.save(); res.json({ success: true, collection, message: 'Collection cancelled.' });
   });
   app.put('/api/notifications/read-all', (_req, res) => {
@@ -153,7 +147,7 @@ export function registerModuleRoutes(app: Express) {
     res.json({ success: true });
   });
   app.post('/api/system/backup', (req: AuthRequest, res) => {
-    const keys: (keyof DatabaseSchema)[] = ['users', 'roles', 'houses', 'collections', 'expenses', 'expenseCategories', 'staff', 'designations', 'salaries', 'attendance', 'ledger', 'settings', 'auditLogs', 'notifications', 'loginHistory', 'backupHistory'];
+    const keys: (keyof DatabaseSchema)[] = ['users', 'roles', 'houses', 'monthlyDues', 'collections', 'expenses', 'expenseCategories', 'staff', 'designations', 'salaries', 'attendance', 'ledger', 'settings', 'auditLogs', 'notifications', 'loginHistory', 'backupHistory'];
     const backup = structuredClone(Object.fromEntries(keys.map(k => [k, db.get(k)])));
     const backupRecord = { id: id('backup'), filename: `Madina_Street_Backup_${today()}.json`, sizeBytes: Buffer.byteLength(JSON.stringify(backup)), createdAt: now(), createdBy: req.user?.name || 'System', type: req.body.type === 'SCHEDULED' ? 'SCHEDULED' as const : 'MANUAL' as const, status: 'COMPLETED' as const };
     db.set('backupHistory', [backupRecord, ...(db.get('backupHistory') || [])]);
@@ -162,11 +156,11 @@ export function registerModuleRoutes(app: Express) {
   app.get('/api/system/health', (_req, res) => res.json({ success: true, health: { dbStatus: 'Healthy', storage: process.env.DATABASE_URL ? 'PostgreSQL relational' : 'Local JSON', totalUsers: db.get('users').length, totalHouses: db.get('houses').length, totalCollections: db.get('collections').length, totalExpenses: db.get('expenses').length, totalLogs: db.get('auditLogs').length, diskUsageKb: 0, appVersion: '0.0.0', nodeVersion: process.version, serverTime: now(), uptimeSeconds: process.uptime() } }));
 
   app.get('/api/financial-summary', (_req, res) => {
-    const income = db.get('collections').filter(c => c.status !== 'Cancelled');
+    const income = db.get('collections').filter(validPayment);
     const expenses = db.get('expenses').filter(e => e.status === 'Approved');
     const salaries = db.get('salaries');
     const sum = (rows: any[], field: string) => rows.reduce((total, r) => total + Number(r[field] || 0), 0);
-    const totals = (prefix: string) => ({ income: sum(income.filter(c => c.paymentDate.startsWith(prefix)), 'totalPaid'), expenses: sum(expenses.filter(e => e.date.startsWith(prefix)), 'amount') + sum(salaries.filter(s => s.paymentDate.startsWith(prefix)), 'netPaid') });
+    const totals = (prefix: string) => ({ income: sum(income.filter(c => (prefix.length === 10 ? c.paymentDate : contribution(c)).startsWith(prefix)), 'totalPaid'), expenses: sum(expenses.filter(e => e.date.startsWith(prefix)), 'amount') + sum(salaries.filter(s => s.paymentDate.startsWith(prefix)), 'netPaid') });
     const all = totals(''), day = totals(today()), month = totals(today().slice(0, 7)), year = totals(today().slice(0, 4));
     const categories = new Map<string, number>();
     for (const e of expenses) categories.set(e.category, (categories.get(e.category) || 0) + e.amount);

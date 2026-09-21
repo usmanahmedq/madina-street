@@ -11,24 +11,28 @@ import {
 } from 'recharts';
 
 interface CollectionDashboardProps {
+  refreshKey?: unknown;
   onOpenReceivePayment: () => void;
   onOpenDailyClosing: () => void;
 }
 
 export const CollectionDashboard: React.FC<CollectionDashboardProps> = ({
+  refreshKey,
   onOpenReceivePayment,
   onOpenDailyClosing,
 }) => {
   const { formatCurrency } = useSettings();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [refreshKey]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await api.getCollectionDashboardStats();
       if (res.success) {
@@ -36,6 +40,7 @@ export const CollectionDashboard: React.FC<CollectionDashboardProps> = ({
       }
     } catch (e) {
       console.error('Error loading collection dashboard stats', e);
+      setError('Collection analytics could not be loaded. Please refresh to retry.');
     } finally {
       setLoading(false);
     }
@@ -51,6 +56,7 @@ export const CollectionDashboard: React.FC<CollectionDashboardProps> = ({
     );
   }
 
+  if (error) return <div role="alert" className="p-6 text-rose-700">{error}</div>;
   const stats = data?.stats || {};
 
   return (

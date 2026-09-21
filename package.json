@@ -11,7 +11,11 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "collections:reconcile": "tsx scripts/reconcile-collections.ts",
+    "collections:verify": "tsx scripts/verify-collections.ts",
+    "expenses:reconcile": "tsx scripts/reconcile-expenses.ts",
+    "expenses:verify": "tsx scripts/verify-expenses.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

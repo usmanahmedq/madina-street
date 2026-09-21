@@ -1,5 +1,11 @@
 # Madina Street PostgreSQL storage
 
+The collection-flow upgrade adds a seventeenth table, `monthly_dues`. See
+[COLLECTION-FLOW-AUDIT.md](COLLECTION-FLOW-AUDIT.md) for the audit, verified real
+totals and commands. On another existing database, run
+`npm run collections:reconcile -- --apply` before starting the updated server.
+This preserves original houses and receipts and is safe to repeat.
+
 The backend uses the 16 relational tables in `create-tables.sql`. Each normal
 field is stored in its named SQL column. `extra_data` retains additional fields
 without losing them, and `sort_order` preserves the application's record order.

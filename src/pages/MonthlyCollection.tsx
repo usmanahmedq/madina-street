@@ -1,3 +1,4 @@
+import { currentMonth, monthLabel, monthKey } from '../utils/contributionMonth';
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { Collection, PaymentMethod } from '../types/index';
@@ -75,7 +76,7 @@ export const MonthlyCollection: React.FC = () => {
   };
 
   const handleBulkGenerateDues = async () => {
-    const targetMonth = prompt('Enter target month for bulk dues generation:', 'September 2026');
+    const targetMonth = prompt('Enter target month for bulk dues generation:', monthLabel(currentMonth()));
     if (!targetMonth) return;
 
     try {
@@ -95,7 +96,7 @@ export const MonthlyCollection: React.FC = () => {
       c.houseNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.headName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.collectorName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesMonth = monthFilter === 'ALL' || c.month === monthFilter;
+    const matchesMonth = monthFilter === 'ALL' || monthKey(c.month, c.year) === monthKey(monthFilter);
     const matchesMethod = methodFilter === 'ALL' || c.paymentMethod === methodFilter;
     const matchesStatus = statusFilter === 'ALL' || (c.status || 'Paid') === statusFilter;
     return matchesSearch && matchesMonth && matchesMethod && matchesStatus;
@@ -185,6 +186,7 @@ export const MonthlyCollection: React.FC = () => {
       {/* Tab 1: Collection Dashboard */}
       {activeTab === 'dashboard' && (
         <CollectionDashboard
+          refreshKey={collections}
           onOpenReceivePayment={() => setIsReceivePaymentOpen(true)}
           onOpenDailyClosing={() => setIsDailyClosingOpen(true)}
         />
@@ -225,10 +227,7 @@ export const MonthlyCollection: React.FC = () => {
                 className="px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold bg-white text-slate-700"
               >
                 <option value="ALL">All Months</option>
-                <option value="August 2026">August 2026</option>
-                <option value="July 2026">July 2026</option>
-                <option value="June 2026">June 2026</option>
-                <option value="May 2026">May 2026</option>
+                {[...new Set<string>(collections.map(c => monthKey(c.month, c.year)))].sort().reverse().map(m => <option key={m} value={monthLabel(m)}>{monthLabel(m)}</option>)}
               </select>
 
               <select
@@ -340,7 +339,7 @@ export const MonthlyCollection: React.FC = () => {
 
       {/* Tab 3: Collector Performance Tracker */}
       {activeTab === 'collectors' && (
-        <CollectorPerformanceView collections={collections} />
+        <CollectorPerformanceView collections={collections.filter(c => c.status !== 'Cancelled')} />
       )}
 
       {/* Receive Payment Modal */}

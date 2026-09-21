@@ -143,7 +143,7 @@ export const HouseProfile: React.FC = () => {
       outstanding: financialSummary.outstandingAmount,
       collectionRate: financialSummary.collectionPercentage,
       pendingMonths: financialSummary.pendingMonthsList,
-      payments: paymentHistory,
+      payments: paymentHistory.filter(c => c.status !== 'Cancelled'),
       mohallaName: settings.mohallaName,
       address: settings.address,
       contactPhone: settings.phone,
@@ -151,7 +151,7 @@ export const HouseProfile: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    const headers = ['Receipt No', 'Month', 'Amount Paid', 'Late Fee', 'Total Paid', 'Payment Date', 'Payment Method', 'Collector'];
+    const headers = ['Receipt No', 'Month', 'Amount Paid', 'Late Fee', 'Total Paid', 'Payment Date', 'Payment Method', 'Collector', 'Status'];
     const rows = paymentHistory.map(c => [
       c.receiptNo,
       c.month,
@@ -161,6 +161,7 @@ export const HouseProfile: React.FC = () => {
       c.paymentDate,
       c.paymentMethod,
       c.collectorName,
+      c.status || 'Paid',
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -436,7 +437,7 @@ export const HouseProfile: React.FC = () => {
                 ) : (
                   paginatedHistory.map((col) => (
                     <tr key={col.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-bold text-teal-800">{col.receiptNo}</td>
+                      <td className="py-3 px-4 font-bold text-teal-800">{col.receiptNo}{col.status === 'Cancelled' ? ' (Cancelled)' : ''}</td>
                       <td className="py-3 px-4 font-semibold text-slate-900">{col.month}</td>
                       <td className="py-3 px-4 font-extrabold text-slate-900 text-right">{formatCurrency(col.totalPaid)}</td>
                       <td className="py-3 px-4 text-slate-600">{col.paymentDate}</td>
@@ -556,7 +557,7 @@ export const HouseProfile: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {paymentHistory.map(c => (
+                {paymentHistory.filter(c => c.status !== 'Cancelled').map(c => (
                   <tr key={c.id}>
                     <td className="p-2.5 font-bold border-r border-slate-200">{c.receiptNo}</td>
                     <td className="p-2.5 border-r border-slate-200">{c.month}</td>

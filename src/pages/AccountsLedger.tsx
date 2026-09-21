@@ -74,7 +74,7 @@ export const AccountsLedger: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={fetchLedger}
+            onClick={async () => { try { await api.reconcileLedger(); await fetchLedger(); } catch (e: any) { alert(e.message); } }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl shadow-xs transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />

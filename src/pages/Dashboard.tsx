@@ -1,41 +1,41 @@
+import { currentMonth, monthLabel } from '../utils/contributionMonth';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { useSettings } from '../context/SettingsContext';
-import { useAuth } from '../context/AuthContext';
 import { StatsCard } from '../components/common/StatsCard';
-import { Badge } from '../components/common/Badge';
 import { PrintReceiptModal } from '../components/receipts/PrintReceiptModal';
 import {
-  Home, Banknote, Receipt, AlertTriangle, Users, TrendingUp,
-  Printer, ArrowUpRight, ArrowDownRight, Layers, CheckCircle, Zap,
-  ShieldAlert, Eye, MessageSquare, ChevronRight
+  Home, Banknote, Receipt, AlertTriangle, TrendingUp,
+  Printer, Layers, CheckCircle, ShieldAlert, ChevronRight
 } from 'lucide-react';
 import { Collection, Expense } from '../types/index';
 
 export const Dashboard: React.FC = () => {
-  const { formatCurrency, settings } = useSettings();
-  const { canManageFinances, canRecordCollection } = useAuth();
+  const { formatCurrency } = useSettings();
 
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<Awaited<ReturnType<typeof api.getDashboardStats>>['stats'] | null>(null);
   const [recentCollections, setRecentCollections] = useState<Collection[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReceipt, setSelectedReceipt] = useState<Collection | null>(null);
 
-  const [bulkMonth, setBulkMonth] = useState('September 2026');
-  const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+  const [topDefaulters, setTopDefaulters] = useState<Awaited<ReturnType<typeof api.getDashboardStats>>['topDefaulters']>([]);
+  const [error, setError] = useState('');
 
   const fetchDashboardData = async () => {
     try {
       const res = await api.getDashboardStats();
       if (res.success) {
         setStats(res.stats);
+        setTopDefaulters(res.topDefaulters);
+        setError('');
         setRecentCollections(res.recentCollections);
         setRecentExpenses(res.recentExpenses);
       }
     } catch (e) {
       console.error('Error fetching dashboard stats', e);
+      setError('Dashboard data could not be refreshed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -43,26 +43,19 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    const refresh = () => { if (!document.hidden) fetchDashboardData(); };
+    window.addEventListener('focus', refresh);
+    const interval = window.setInterval(refresh, 60_000);
+    return () => { window.removeEventListener('focus', refresh); window.clearInterval(interval); };
   }, []);
 
-  const handleBulkGenerate = async () => {
-    if (!confirm(`Are you sure you want to generate monthly dues for ALL active houses for ${bulkMonth}?`)) {
-      return;
-    }
-
-    setIsBulkGenerating(true);
-    try {
-      const res = await api.bulkGenerateDues(bulkMonth);
-      if (res.success) {
-        alert(`Successfully generated dues for ${res.updatedCount} active houses!`);
-        fetchDashboardData();
-      }
-    } catch (e) {
-      alert('Failed to generate bulk dues');
-    } finally {
-      setIsBulkGenerating(false);
-    }
-  };
+  const position = stats?.collectionPosition;
+  const positionView = position?.state === 'advance'
+    ? { title: 'Advance Balance', subtitle: 'Collection above current dues', icon: TrendingUp, bg: 'bg-teal-50', color: 'text-teal-700' }
+    : position?.state === 'settled'
+      ? { title: 'Outstanding Dues', subtitle: 'Monthly target fully collected', icon: CheckCircle, bg: 'bg-emerald-50', color: 'text-emerald-700' }
+      : { title: 'Outstanding Dues', subtitle: 'Still to collect this month', icon: AlertTriangle, bg: 'bg-amber-50', color: 'text-amber-700' };
+  const efficiency = (stats?.collectionRatePercentage ?? 0).toFixed(1);
 
   if (loading) {
     return (
@@ -72,50 +65,26 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+  if (!stats) return <p role="alert" className="text-sm text-amber-700">{error || 'Dashboard data is unavailable.'}</p>;
+
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Top Banner & Quick Dues Generator */}
-      <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-teal-950 rounded-2xl p-6 md:p-8 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2 max-w-xl">
+      {error && <p role="alert" className="text-sm text-amber-700">{error}</p>}
+      {/* Main dashboard product banner */}
+      <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-teal-950 rounded-2xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
+        <div className="space-y-2 max-w-3xl">
           <span className="inline-block text-[10px] font-extrabold uppercase tracking-widest bg-teal-700/80 text-teal-200 px-3 py-1 rounded-full border border-teal-600/50">
-            ACTIVE SESSION • AUGUST 2026
+            ACTIVE SESSION • {monthLabel(stats?.contributionMonth || currentMonth()).toUpperCase()}
           </span>
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight">{settings.mohallaName}</h1>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Madina Street ERP</h1>
           <p className="text-xs text-teal-200/90 leading-relaxed">
-            Welcome to the central executive control panel. Manage collections, track operational expenses, disburse staff salaries, and generate verified receipts.
+            Centralized management for monthly collections, expenses, staff operations, accounts and financial reporting.
           </p>
         </div>
-
-        {canManageFinances && (
-          <div className="bg-teal-950/70 backdrop-blur-sm border border-teal-700/60 p-4 rounded-xl space-y-2 shrink-0">
-            <div className="flex items-center gap-2 text-xs font-bold text-teal-100">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <span>Mass Dues Generator</span>
-            </div>
-            <p className="text-[11px] text-teal-300">Issue monthly contribution dues for all active houses with 1-click</p>
-            <div className="flex items-center gap-2 pt-1">
-              <select
-                value={bulkMonth}
-                onChange={e => setBulkMonth(e.target.value)}
-                className="bg-teal-900 text-white text-xs px-2.5 py-1.5 rounded-lg border border-teal-700 font-semibold"
-              >
-                <option value="September 2026">September 2026</option>
-                <option value="October 2026">October 2026</option>
-              </select>
-              <button
-                onClick={handleBulkGenerate}
-                disabled={isBulkGenerating}
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-lg transition-colors shadow-sm"
-              >
-                {isBulkGenerating ? 'Generating...' : 'Issue Dues'}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Primary KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-5">
         <StatsCard
           title="Total Houses Registered"
           value={stats?.totalHouses || 0}
@@ -126,13 +95,21 @@ export const Dashboard: React.FC = () => {
         />
 
         <StatsCard
+          title="Expected This Month"
+          value={formatCurrency(stats?.expectedMonthlyIncome || 0)}
+          subtitle={`${stats?.applicableHouses || 0} Active Houses`}
+          icon={Layers}
+          iconBgColor="bg-teal-50"
+          iconTextColor="text-teal-700"
+        />
+
+        <StatsCard
           title="Collected This Month"
           value={formatCurrency(stats?.totalCollectedThisMonth || 0)}
-          subtitle={`${stats?.collectionRatePercentage || 0}% Target Reached`}
+          subtitle={`${efficiency}% Target Reached`}
           icon={Banknote}
           iconBgColor="bg-emerald-50"
           iconTextColor="text-emerald-700"
-          trend={{ value: '12%', isPositive: true }}
         />
 
         <StatsCard
@@ -145,12 +122,12 @@ export const Dashboard: React.FC = () => {
         />
 
         <StatsCard
-          title="Outstanding Dues"
-          value={formatCurrency(stats?.outstandingDuesTotal || 0)}
-          subtitle="Pending collection across sectors"
-          icon={AlertTriangle}
-          iconBgColor="bg-amber-50"
-          iconTextColor="text-amber-700"
+          title={positionView.title}
+          value={formatCurrency(position?.amount ?? 0)}
+          subtitle={positionView.subtitle}
+          icon={positionView.icon}
+          iconBgColor={positionView.bg}
+          iconTextColor={positionView.color}
         />
       </div>
 
@@ -162,7 +139,7 @@ export const Dashboard: React.FC = () => {
               <h3 className="font-bold text-slate-900 text-sm">Monthly Collection Efficiency Rate</h3>
               <p className="text-slate-500 text-xs">Expected Target: {formatCurrency(stats?.expectedMonthlyIncome || 0)}</p>
             </div>
-            <span className="font-extrabold text-teal-700 text-base">{stats?.collectionRatePercentage}%</span>
+            <span className="font-extrabold text-teal-700 text-base">{efficiency}%</span>
           </div>
 
           <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
@@ -201,8 +178,8 @@ export const Dashboard: React.FC = () => {
           </div>
 
           <div className="space-y-2 text-xs">
-            {stats?.topDefaulters && stats.topDefaulters.length > 0 ? (
-              stats.topDefaulters.slice(0, 3).map((item: any) => (
+            {topDefaulters.length > 0 ? (
+              topDefaulters.slice(0, 3).map((item) => (
                 <div key={item.houseId} className="flex items-center justify-between p-2.5 rounded-xl bg-rose-50/50 border border-rose-100">
                   <div>
                     <div className="flex items-center gap-2">
@@ -216,7 +193,7 @@ export const Dashboard: React.FC = () => {
                     <p className="text-[10px] text-slate-500">{item.headName}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-black text-rose-700">{formatCurrency(item.currentDues)}</p>
+                    <p className="font-black text-rose-700">{formatCurrency(item.outstandingAmount)}</p>
                     <Link to={`/houses/${item.houseId}`} className="text-[10px] text-teal-700 font-bold hover:underline">
                       View Profile
                     </Link>

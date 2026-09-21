@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import { Pool } from 'pg';
 import { RelationalStore, TABLES, MIGRATION_ID, STORAGE_LOCK } from '../server/relational-store';
 import type { DatabaseSchema } from '../server/db';
@@ -9,6 +10,8 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
   await client.query('SELECT pg_advisory_xact_lock($1)', [STORAGE_LOCK]);
+  await client.query(fs.readFileSync('database/collection-flow.sql', 'utf8'));
+  await client.query(fs.readFileSync('database/expense-flow.sql', 'utf8'));
   await client.query(`CREATE TABLE IF NOT EXISTS public.app_schema_migrations (
     id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now(), record_counts jsonb NOT NULL
   )`);

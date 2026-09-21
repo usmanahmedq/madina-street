@@ -5,7 +5,7 @@ import type { DatabaseSchema } from './db';
 export const TABLES = {
   roles: 'roles', users: 'users', houses: 'houses',
   expenseCategories: 'expense_categories', designations: 'designations', staff: 'staff',
-  collections: 'collections', expenses: 'expenses', salaries: 'salaries',
+  monthlyDues: 'monthly_dues', collections: 'collections', expenses: 'expenses', salaries: 'salaries',
   attendance: 'attendance', ledger: 'ledger', settings: 'settings',
   notifications: 'notifications', backupHistory: 'backup_history',
   loginHistory: 'login_history', auditLogs: 'audit_logs',

@@ -223,6 +223,7 @@ export const initialLoginHistory: LoginHistoryRecord[] = [
 ];
 
 export interface DatabaseSchema {
+  monthlyDues?: import('../src/types').MonthlyDue[];
   users: User[];
   roles?: CustomRole[];
   notifications?: SystemNotification[];
@@ -1027,7 +1028,7 @@ class Database {
       if (!migration.rowCount) throw new Error('Run npm run db:migrate before starting the server.');
       await this.relational.initialize(client);
     } finally { client.release(); }
-    console.log('PostgreSQL connected: 16 relational tables active');
+    console.log('PostgreSQL connected: relational storage active');
   }
 
   public async close() {
@@ -1036,7 +1037,24 @@ class Database {
 
   // Writes are serialized across servers. Reads use a consistent, read-only snapshot.
   public middleware = async (_req: Request, res: Response, next: NextFunction) => {
-    if (!this.pool) return next();
+    if (!this.pool) {
+      // Local mode also commits the complete request once, or discards it on failure.
+      const state = { data: structuredClone(this.localData), dirty: false };
+      const end = res.end.bind(res);
+      res.end = ((...args: any[]) => {
+        if (res.statusCode < 400 && state.dirty) {
+          try { this.saveDataDirect(state.data); this.localData = state.data; }
+          catch {
+            res.statusCode = 503;
+            res.removeHeader('Content-Length');
+            res.removeHeader('ETag');
+            return end(JSON.stringify({ success: false, message: 'Database write failed.' }));
+          }
+        }
+        return (end as any)(...args);
+      }) as Response['end'];
+      return this.context.run(state, next);
+    }
     let client;
     try {
       client = await this.pool.connect();
@@ -1165,10 +1183,14 @@ class Database {
   }
 
   private saveDataDirect(dbData: DatabaseSchema) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), 'utf-8');
+    const temporary = DB_FILE + '.tmp';
+    fs.writeFileSync(temporary, JSON.stringify(dbData, null, 2), 'utf-8');
+    fs.renameSync(temporary, DB_FILE);
   }
 
   public save() {
+    const requestState = this.context.getStore();
+    if (requestState) { requestState.dirty = true; return; }
     if (this.pool) {
       const state = this.context.getStore();
       if (!state) throw new Error('Database writes require an API request transaction');
