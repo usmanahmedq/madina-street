@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
+import { logDatabaseError } from './server/database-errors';
 import { registerModuleRoutes } from './server/module-routes';
 import { registerCollectionRoutes, financeData } from './server/collection-routes';
 import { registerExpenseRoutes } from './server/expense-routes';
@@ -472,6 +473,10 @@ app.put('/api/settings', (req: AuthRequest, res: Response) => {
 });
 
 registerModuleRoutes(app);
+app.use('/api', (error: unknown, _req: Request, res: Response, _next: import('express').NextFunction) => {
+  logDatabaseError('API storage operation', error);
+  res.status(503).json({ success: false, message: 'Storage operation failed. Please retry.' });
+});
 app.use('/api', (_req, res) => res.status(404).json({ success: false, message: 'API endpoint not found.' }));
 
 // Vite Development Integration
@@ -501,7 +506,8 @@ async function startServer() {
   });
 }
 
-if (process.env.MADINA_TEST_MODE !== '1') startServer().catch(() => {
+if (process.env.MADINA_TEST_MODE !== '1') startServer().catch(error => {
+  logDatabaseError('server startup', error);
   console.error('Server startup failed. Check database connectivity and configuration.');
   process.exit(1);
 });

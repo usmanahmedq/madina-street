@@ -2,11 +2,11 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
-import { Pool } from 'pg';
+import { createDatabasePool } from '../server/database-pool';
 import { db, type DatabaseSchema } from '../server/db';
 import { RelationalStore, STORAGE_LOCK, TABLES } from '../server/relational-store';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
+const pool = createDatabasePool();
 const testId = `verify-${randomUUID()}`;
 const client = await pool.connect();
 let server: ReturnType<ReturnType<typeof express>['listen']> | undefined;

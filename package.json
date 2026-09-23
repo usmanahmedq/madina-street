@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "db:verify-connectivity": "tsx scripts/verify-live-connectivity.ts",
+    "staff:verify": "tsx scripts/verify-staff.ts",
     "db:migrate": "tsx scripts/migrate-database.ts",
     "db:verify": "tsx scripts/verify-database.ts",
     "dev": "tsx server.ts",
@@ -19,6 +21,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@neondatabase/serverless": "^1.1.0",
     "@types/pg": "^8.23.1",
     "@vitejs/plugin-react": "^5.0.4",
     "bcryptjs": "^3.0.3",

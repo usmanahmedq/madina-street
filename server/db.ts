@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import fs from 'fs';
-import { Pool } from 'pg';
+import { createDatabasePool, databaseTransport } from './database-pool';
 import { RelationalStore, MIGRATION_ID, STORAGE_LOCK } from './relational-store';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { acquireConnection, logDatabaseError } from './database-errors';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import {
@@ -1006,7 +1007,7 @@ const initialAuditLogs: AuditLog[] = [
 class Database {
   private localData!: DatabaseSchema;
   private context = new AsyncLocalStorage<{ data: DatabaseSchema; dirty: boolean }>();
-  private pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000, enableChannelBinding: true }) : undefined;
+  private pool = process.env.DATABASE_URL ? createDatabasePool({ enableChannelBinding: true }) : undefined;
   private relational = new RelationalStore();
 
   private get data(): DatabaseSchema { return this.context.getStore()?.data ?? this.localData; }
@@ -1021,14 +1022,14 @@ class Database {
 
   public async initialize() {
     if (!this.pool) return;
-    this.pool.on('error', () => console.error('Unexpected idle PostgreSQL connection error'));
-    const client = await this.pool.connect();
+    this.pool.on('error', error => logDatabaseError('idle connection', error));
+    const client = await acquireConnection(() => this.pool!.connect());
     try {
       const migration = await client.query('SELECT id FROM public.app_schema_migrations WHERE id = $1', [MIGRATION_ID]);
       if (!migration.rowCount) throw new Error('Run npm run db:migrate before starting the server.');
       await this.relational.initialize(client);
     } finally { client.release(); }
-    console.log('PostgreSQL connected: relational storage active');
+    console.log(`PostgreSQL connected: relational storage active (${databaseTransport()})`);
   }
 
   public async close() {
@@ -1044,7 +1045,8 @@ class Database {
       res.end = ((...args: any[]) => {
         if (res.statusCode < 400 && state.dirty) {
           try { this.saveDataDirect(state.data); this.localData = state.data; }
-          catch {
+          catch (error) {
+            logDatabaseError('local file write', error);
             res.statusCode = 503;
             res.removeHeader('Content-Length');
             res.removeHeader('ETag');
@@ -1057,7 +1059,7 @@ class Database {
     }
     let client;
     try {
-      client = await this.pool.connect();
+      client = await acquireConnection(() => this.pool!.connect());
       const readOnly = ['GET', 'HEAD'].includes(_req.method);
       await client.query(`${readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN'};
         SET LOCAL lock_timeout = '15s'; SET LOCAL statement_timeout = '30s'`);
@@ -1086,7 +1088,7 @@ class Database {
             (end as any)(...args);
           } catch (error: any) {
             await client!.query('ROLLBACK').catch(() => {});
-            console.error('Database transaction failed:', error.code || error.name);
+            logDatabaseError('transaction commit', error);
             res.statusCode = ['23001', '23505', '23503', '23514', '23502', '22P02', '22007', '22008'].includes(error.code) ? 409 : 503;
             res.removeHeader('Content-Length');
             res.removeHeader('ETag');
@@ -1103,12 +1105,13 @@ class Database {
         }
       });
       this.context.run(state, next);
-    } catch {
+    } catch (error) {
+      logDatabaseError('request connection/setup', error);
       if (client) {
         await client.query('ROLLBACK').catch(() => {});
         client.release();
       }
-      res.status(503).json({ success: false, message: 'Database unavailable. Please retry.' });
+      if (!res.destroyed) res.status(503).json({ success: false, message: 'Database connection failed. No changes were saved. Please retry shortly.' });
     }
   };
 

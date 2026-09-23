@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import { dashboardPosition, mainDashboardSummary } from '../server/dashboard-finance';
 const readOnly = process.argv.includes('--read-only');
-import { Pool } from 'pg';
+import { createDatabasePool } from '../server/database-pool';
 import { RelationalStore } from '../server/relational-store';
 import { contribution, currentMonth, generateDues, houseSummary, monthKey, monthSummary, reconcile, refreshDues, validPayment } from '../server/collection-finance';
 if (!process.env.DATABASE_URL)
     throw new Error('Existing PostgreSQL data is required.');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
+const pool = createDatabasePool();
 const client = await pool.connect();
 let checks = 0;
 try {

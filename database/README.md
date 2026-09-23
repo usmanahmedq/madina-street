@@ -28,6 +28,22 @@ The archived snapshot is not a current backup of later changes.
 
 ## Running
 
+Neon hosts use `@neondatabase/serverless` Pool over secure WebSockets (TLS port
+443). This preserves PostgreSQL sessions, BEGIN/COMMIT/ROLLBACK and advisory
+locks; one-shot HTTPS queries cannot replace these interactive transactions.
+`DATABASE_URL` and credentials stay unchanged. Other database hosts retain the
+standard `pg` TCP connection. `DATABASE_TRANSPORT=postgres` explicitly selects
+the original transport; `neon-websocket` is accepted only for Neon hosts.
+The server and database scripts share `server/database-pool.ts`.
+No schema migration is needed for a transport change.
+
+`npm run db:verify-connectivity` verifies the known September dataset and API
+reads without writes. The explicit `-- --live-staff` option creates one uniquely
+marked temporary staff row, verifies concurrent retries and a full application
+process restart, and deletes only that test identity in a finally block. It then
+compares every application record with the original in-memory snapshot. No
+production snapshot is written to disk. Use the write option only when authorized.
+
 Set the server-only `DATABASE_URL` in the ignored `.env` file, then run:
 
 ```powershell

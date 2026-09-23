@@ -20,6 +20,8 @@ export const StaffManagement: React.FC = () => {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [designations, setDesignations] = useState<StaffDesignation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,7 +66,9 @@ export const StaffManagement: React.FC = () => {
 
       if (staffRes.success) setStaffList(staffRes.staff);
       if (desRes.success && desRes.designations) setDesignations(desRes.designations);
-    } catch (e) {
+      setLoadError('');
+    } catch (e: any) {
+      setLoadError(e.message || 'Staff data could not be loaded. Please retry.');
       console.error('Error fetching staff management data', e);
     } finally {
       setLoading(false);
@@ -77,14 +81,15 @@ export const StaffManagement: React.FC = () => {
 
   const openAddModal = () => {
     setEditingStaff(null);
-    setEmpNo(`EMP-${String(staffList.length + 1).padStart(3, '0')}`);
+    const nextNumber = Math.max(0, ...staffList.map(s => /^EMP-\d+$/.test(s.empNo) ? Number(s.empNo.slice(4)) : 0)) + 1;
+    setEmpNo(`EMP-${String(nextNumber).padStart(3, '0')}`);
     setName('');
     setFatherName('');
     setRole(designations.length > 0 ? designations[0].title : 'Security Guard');
-    setPhone('0300-1112233');
-    setCnic('35201-1234567-1');
-    setEmergencyContact('0300-4445566');
-    setAddress('Gate 1 Quarter, Madina Street');
+    setPhone('');
+    setCnic('');
+    setEmergencyContact('');
+    setAddress('');
     setJoiningDate(new Date().toISOString().split('T')[0]);
     setMonthlySalary(30000);
     setStatus('Active');
@@ -111,6 +116,8 @@ export const StaffManagement: React.FC = () => {
 
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     const payload = {
       empNo,
       name: name.trim(),
@@ -128,14 +135,18 @@ export const StaffManagement: React.FC = () => {
 
     try {
       if (editingStaff) {
-        await api.updateStaff(editingStaff.id, payload);
+        const result = await api.updateStaff(editingStaff.id, payload);
+        setStaffList(list => list.map(s => s.id === result.staff.id ? result.staff : s));
       } else {
-        await api.createStaff(payload);
+        const result = await api.createStaff(payload);
+        setStaffList(list => [...list.filter(s => s.id !== result.staff.id), result.staff]);
       }
       setShowAddEditModal(false);
       fetchData();
     } catch (err: any) {
       alert(err.message || 'Failed to save staff record');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -268,6 +279,10 @@ export const StaffManagement: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {loadError && <div role="alert" className="text-sm text-red-700">
+        {loadError} <button type="button" onClick={fetchData} className="underline font-semibold">Retry</button>
+      </div>}
 
       {/* Search & Filter Bar */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
@@ -464,6 +479,7 @@ export const StaffManagement: React.FC = () => {
           maxWidth="max-w-xl"
         >
           <form onSubmit={handleSaveStaff} className="space-y-4 text-xs">
+            {loadError && <p role="alert" className="text-red-700">{loadError}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="font-bold text-slate-700">Employee ID (Auto-Generated)</label>
@@ -615,9 +631,10 @@ export const StaffManagement: React.FC = () => {
               </button>
               <button
                 type="submit"
+                disabled={saving || !!loadError || designations.length === 0}
                 className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm"
               >
-                {editingStaff ? 'Update Staff Record' : 'Register Staff'}
+                {saving ? 'Saving...' : editingStaff ? 'Update Staff Record' : 'Register Staff'}
               </button>
             </div>
           </form>

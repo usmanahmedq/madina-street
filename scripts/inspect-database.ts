@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
+import { createDatabasePool } from '../server/database-pool';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
+const pool = createDatabasePool();
 try {
   const tables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
   console.log('Tables:', tables.rows.map(r => r.table_name));

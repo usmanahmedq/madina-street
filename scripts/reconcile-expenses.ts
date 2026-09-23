@@ -2,7 +2,7 @@ import 'dotenv/config';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
-import { Pool } from 'pg';
+import { createDatabasePool } from '../server/database-pool';
 import { RelationalStore, STORAGE_LOCK, TABLES } from '../server/relational-store';
 import { reconcileExpenseLedger, activeLedger } from '../server/expense-finance';
 import { monthSummary, money } from '../server/collection-finance';
@@ -10,7 +10,7 @@ const apply=process.argv.includes('--apply');
 const expenseId=process.argv.find(a=>a.startsWith('--expense-id='))?.split('=').slice(1).join('=');
 if (!expenseId) throw new Error('Provide --expense-id=<source ID>. Backfill is restricted to that expense.');
 if (!process.env.DATABASE_URL) throw new Error('Configured PostgreSQL database required.');
-const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=createDatabasePool();
 const client=await pool.connect();
 try {
  await client.query('BEGIN');

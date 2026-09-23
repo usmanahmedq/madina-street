@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import fs from 'node:fs';
-import { Pool } from 'pg';
+import { createDatabasePool } from '../server/database-pool';
 import { RelationalStore, TABLES, MIGRATION_ID, STORAGE_LOCK } from '../server/relational-store';
 import type { DatabaseSchema } from '../server/db';
 import { isDeepStrictEqual } from 'node:util';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000, enableChannelBinding: true });
+const pool = createDatabasePool({ enableChannelBinding: true });
 const client = await pool.connect();
 try {
   await client.query('BEGIN');

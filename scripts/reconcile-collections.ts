@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { Pool } from 'pg';
+import { createDatabasePool } from '../server/database-pool';
 import { RelationalStore, STORAGE_LOCK } from '../server/relational-store';
 import { reconcile, monthSummary, eligible, currentMonth, validPayment } from '../server/collection-finance';
 const apply = process.argv.includes('--apply');
 if (!process.env.DATABASE_URL)
     throw new Error('DATABASE_URL is required; this command never substitutes local demo data.');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
+const pool = createDatabasePool();
 const client = await pool.connect();
 try {
     await client.query('BEGIN');

@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { registerStaffRoutes } from './staff-routes';
 import { db, type DatabaseSchema } from './db';
 import type { User } from '../src/types';
 import { financeData } from './collection-routes';
@@ -12,9 +13,10 @@ const today = () => now().slice(0, 10);
 const fail = (res: Response, message: string, status = 400) => res.status(status).json({ success: false, message });
 
 export function registerModuleRoutes(app: Express) {
+  registerStaffRoutes(app, db);
   const reads: [string, keyof DatabaseSchema, string][] = [
     ['/api/roles', 'roles', 'roles'], ['/api/staff/designations', 'designations', 'designations'],
-    ['/api/staff', 'staff', 'staff'], ['/api/salaries', 'salaries', 'salaries'],
+    ['/api/salaries', 'salaries', 'salaries'],
     ['/api/attendance', 'attendance', 'attendance'],
     ['/api/expense-categories', 'expenseCategories', 'categories'],
     ['/api/notifications', 'notifications', 'notifications'], ['/api/audit-logs', 'auditLogs', 'auditLogs'],
@@ -36,7 +38,6 @@ export function registerModuleRoutes(app: Express) {
     });
   }
   update('/api/users/:id', 'users', 'user', ['name', 'email', 'username', 'role', 'status', 'phone', 'avatar', 'permissions']);
-  update('/api/staff/:id', 'staff', 'staff', ['name', 'fatherName', 'cnic', 'phone', 'emergencyContact', 'address', 'role', 'joiningDate', 'monthlySalary', 'status', 'notes', 'photoUrl']);
   update('/api/roles/:id', 'roles', 'role', ['name', 'description', 'permissions']);
 
   for (const [route, key, field, responseKey] of [
@@ -65,16 +66,6 @@ export function registerModuleRoutes(app: Express) {
     });
   }
 
-  app.post('/api/staff', (req, res) => {
-    const body = req.body;
-    if (!body.name || !body.role || !body.cnic || !body.phone || !body.joiningDate) return fail(res, 'Name, designation, CNIC, phone and joining date are required.');
-    const salary = Number(body.monthlySalary);
-    if (!Number.isFinite(salary) || salary < 0) return fail(res, 'Monthly salary must be a non-negative number.');
-    const staff = { id: id('staff'), empNo: body.empNo || `EMP-${randomUUID().slice(0, 8).toUpperCase()}`, name: body.name, fatherName: body.fatherName, cnic: body.cnic, phone: body.phone, emergencyContact: body.emergencyContact, address: body.address || '', role: body.role, joiningDate: body.joiningDate, monthlySalary: salary, status: body.status || 'Active', notes: body.notes || '', photoUrl: body.photoUrl, createdAt: now() };
-    db.get('staff').push(staff);
-    db.save();
-    res.json({ success: true, staff });
-  });
   app.delete('/api/staff/:id', (req, res) => {
     const staff = db.get('staff').find(r => r.id === req.params.id);
     if (!staff) return fail(res, 'Staff member not found.', 404);
