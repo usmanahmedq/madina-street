@@ -4,7 +4,6 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { createServer as createHttpServer } from 'http';
-import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
 import { logDatabaseError } from './server/database-errors';
 import { registerModuleRoutes } from './server/module-routes';
@@ -15,7 +14,7 @@ import { currentMonth, monthLabel, houseSummary } from './server/collection-fina
 import { User, House, Collection, Expense, Staff, SalaryPayment, AttendanceRecord, LedgerEntry, MohallaSettings } from './src/types/index';
 
 const JWT_SECRET = requireJwtSecret();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 export const app = express();
 
@@ -399,6 +398,7 @@ async function startServer() {
   const httpServer = createHttpServer(app);
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
