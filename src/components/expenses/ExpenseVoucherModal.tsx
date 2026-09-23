@@ -1,3 +1,4 @@
+import { APP_NAME } from '../../constants/branding';
 import React from 'react';
 import { Expense } from '../../types/index';
 import { useSettings } from '../../context/SettingsContext';
@@ -52,7 +53,7 @@ export const ExpenseVoucherModal: React.FC<ExpenseVoucherModalProps> = ({ expens
     // Header
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(settings.mohallaName.toUpperCase(), 105, 20, { align: 'center' });
+    doc.text(APP_NAME, 105, 20, { align: 'center' });
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -133,8 +134,8 @@ export const ExpenseVoucherModal: React.FC<ExpenseVoucherModalProps> = ({ expens
               بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
             </p>
           )}
-          <h2 className="text-lg font-black text-slate-900 tracking-wide uppercase">
-            {settings.mohallaName}
+          <h2 className="text-lg font-black text-slate-900 tracking-wide">
+            {APP_NAME}
           </h2>
           <p className="text-xs text-slate-500 font-medium">
             {settings.address} • Ph: {settings.phone}

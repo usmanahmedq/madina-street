@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { verificationAuthorization } from './verification-auth';
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
@@ -83,7 +84,7 @@ try {
   const live='http://127.0.0.1:'+(server.address() as any).port;
   try {
    const paths=['/api/dashboard/stats','/api/expenses','/api/ledger','/api/reports/summary','/api/financial-summary','/api/reports/monthly-closing?month='+month];
-   const responses=await Promise.all(paths.map(async path=>{const r=await fetch(live+path);check(r.status===200,'Live GET '+path);return r.json() as any;}));
+   const responses=await Promise.all(paths.map(async path=>{const r=await fetch(live+path,{headers:verificationAuthorization(original.users)});check(r.status===200,'Live GET '+path);return r.json() as any;}));
    const [dashboard,expenses,ledger,reports,financial,closing]=responses;
    const total=money(original.expenses.filter(e=>e.status==='Approved'&&e.date.startsWith(month)).reduce((s,e)=>s+e.amount,0));
    check(dashboard.stats.totalExpensesThisMonth===total,'Live dashboard expense total');

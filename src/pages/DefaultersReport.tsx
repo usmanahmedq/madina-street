@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -199,7 +200,7 @@ export const DefaultersReport: React.FC = () => {
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {/* Printable Header */}
         <div className="hidden print:block text-center p-6 border-b border-slate-300">
-          <h2 className="text-xl font-black text-slate-900">{settings.mohallaName}</h2>
+          <h2 className="text-xl font-black text-slate-900">{APP_NAME}</h2>
           <p className="text-xs text-slate-600">{settings.address} • {settings.phone}</p>
           <p className="text-sm font-bold text-rose-800 uppercase tracking-widest mt-2">DEFAULTERS & OUTSTANDING DUES REPORT</p>
           <p className="text-xs text-slate-500 mt-1">Generated on: {new Date().toLocaleDateString()}</p>
@@ -294,7 +295,7 @@ export const DefaultersReport: React.FC = () => {
                         </button>
 
                         <a
-                          href={`https://wa.me/${cleanPhone(item.whatsapp || item.phone)}?text=Assalam%20o%20Alaikum%20${encodeURIComponent(item.headName)},%20this%20is%20a%20reminder%20from%20${encodeURIComponent(settings.mohallaName)}%20regarding%20outstanding%20dues%20of%20Rs.%20${item.currentDues}%20for%20House%20${item.houseNo}.`}
+                          href={`https://wa.me/${cleanPhone(item.whatsapp || item.phone)}?text=Assalam%20o%20Alaikum%20${encodeURIComponent(item.headName)},%20this%20is%20a%20reminder%20from%20${encodeURIComponent(APP_NAME)}%20regarding%20outstanding%20dues%20of%20Rs.%20${item.currentDues}%20for%20House%20${item.houseNo}.`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200"

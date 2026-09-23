@@ -1,11 +1,11 @@
+import { APP_NAME } from '../../constants/branding';
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import {
-  Bell, Plus, LogOut, Shield, ChevronDown, Check,
+  Bell, Plus, LogOut, Shield, ChevronDown,
   UserCheck, Sparkles, Building
 } from 'lucide-react';
-import { UserRole } from '../../types/index';
 import { GlobalHouseSearch } from '../common/GlobalHouseSearch';
 
 interface HeaderProps {
@@ -17,23 +17,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQuickCollection,
   onOpenQuickExpense,
 }) => {
-  const { user, logout, login, canRecordCollection, canManageFinances } = useAuth();
+  const { user, logout, canRecordCollection, canManageFinances } = useAuth();
   const { settings } = useSettings();
 
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-
-  const availableRoles: { role: UserRole; name: string; email: string }[] = [
-    { role: 'Administrator', name: 'Administrator (Admin)', email: 'admin@madinastreet.org' },
-    { role: 'Treasurer', name: 'Syed Tariq Mahmood (Treasurer)', email: 'treasurer@madinastreet.org' },
-    { role: 'Collector', name: 'Muhammad Usman (Collector)', email: 'collector@madinastreet.org' },
-    { role: 'Viewer', name: 'Mohalla Auditor (Viewer)', email: 'viewer@madinastreet.org' },
-  ];
-
-  const handleSwitchRole = async (email: string, role: UserRole) => {
-    await login(email, role);
-    setShowRoleMenu(false);
-  };
 
   return (
     <header className="h-16 bg-white border-b border-slate-200/80 sticky top-0 z-30 px-6 flex items-center justify-between shadow-xs gap-4">
@@ -41,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-3 shrink-0">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200/60 text-teal-800">
           <Building className="w-4 h-4 text-teal-700" />
-          <span className="text-xs font-bold">{settings.mohallaName}</span>
+          <span className="text-xs font-bold">{APP_NAME}</span>
         </div>
         <span className="text-xs text-slate-400 hidden lg:inline">• {settings.registrationNo}</span>
       </div>
@@ -107,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* User Role Switcher Menu */}
+        {/* Account Menu */}
         <div className="relative">
           <button
             onClick={() => setShowRoleMenu(!showRoleMenu)}
@@ -126,24 +114,8 @@ export const Header: React.FC<HeaderProps> = ({
           {showRoleMenu && (
             <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-fade-in">
               <div className="px-4 py-2 border-b border-slate-100">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Switch Account Role</p>
-                <p className="text-xs text-slate-500 mt-0.5">Test system as different user</p>
-              </div>
-
-              <div className="py-1">
-                {availableRoles.map(item => (
-                  <button
-                    key={item.role}
-                    onClick={() => handleSwitchRole(item.email, item.role)}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between text-xs transition-colors"
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-900">{item.name}</p>
-                      <span className="text-[10px] text-slate-400">{item.role}</span>
-                    </div>
-                    {user?.role === item.role && <Check className="w-4 h-4 text-teal-700 shrink-0" />}
-                  </button>
-                ))}
+                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Your Account</p>
+                <p className="text-xs text-slate-500 mt-0.5">{user?.name} · {user?.role}</p>
               </div>
 
               <div className="border-t border-slate-100 pt-1 mt-1 px-2">

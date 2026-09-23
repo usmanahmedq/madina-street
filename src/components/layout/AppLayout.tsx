@@ -1,3 +1,4 @@
+import { APP_NAME } from '../../constants/branding';
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
@@ -120,7 +121,7 @@ export const AppLayout: React.FC = () => {
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-teal-700 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs font-bold text-slate-600">Loading Madina Street System...</p>
+          <p className="text-xs font-bold text-slate-600">Loading {APP_NAME}...</p>
         </div>
       </div>
     );

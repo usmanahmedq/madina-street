@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import { currentMonth, monthLabel } from '../utils/contributionMonth';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -76,7 +77,7 @@ export const Dashboard: React.FC = () => {
           <span className="inline-block text-[10px] font-extrabold uppercase tracking-widest bg-teal-700/80 text-teal-200 px-3 py-1 rounded-full border border-teal-600/50">
             ACTIVE SESSION • {monthLabel(stats?.contributionMonth || currentMonth()).toUpperCase()}
           </span>
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Madina Street ERP</h1>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">{APP_NAME}</h1>
           <p className="text-xs text-teal-200/90 leading-relaxed">
             Centralized management for monthly collections, expenses, staff operations, accounts and financial reporting.
           </p>

@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,7 +11,7 @@ export const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = await login(email);
+    const success = await login(email, password);
     if (success) {
       window.location.href = '/';
     } else {
@@ -22,7 +23,7 @@ export const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">
-          Madina Street ERP Login
+          {APP_NAME}
         </h2>
         
         {error && (

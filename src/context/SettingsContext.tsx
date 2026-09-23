@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { MohallaSettings } from '../types/index';
 import { api } from '../services/api';
@@ -11,7 +12,7 @@ interface SettingsContextType {
 }
 
 const defaultSettings: MohallaSettings = {
-  mohallaName: 'Madina Street Welfare Society',
+  mohallaName: APP_NAME,
   registrationNo: 'REG/MSWS/2022/8841',
   address: 'Madina Street, Sector A & B, Model Town, Lahore',
   phone: '+92 300 1234567',

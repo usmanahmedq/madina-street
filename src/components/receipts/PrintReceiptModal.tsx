@@ -1,3 +1,4 @@
+import { APP_NAME } from '../../constants/branding';
 import React, { useRef } from 'react';
 import { Collection } from '../../types/index';
 import { useSettings } from '../../context/SettingsContext';
@@ -116,7 +117,7 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
         <body>
           <div class="receipt-box">
             ${settings.showBismillah ? `<div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>` : ''}
-            <div class="header-title">${settings.mohallaName}</div>
+            <div class="header-title">${APP_NAME}</div>
             <div class="sub-title">${settings.address} | ${settings.phone}</div>
             <div style="text-align: center; margin-bottom: 16px;">
               <span style="background: #e6fffa; color: #0f766e; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; border: 1px solid #b2f5ea;">
@@ -191,7 +192,7 @@ export const PrintReceiptModal: React.FC<PrintReceiptModalProps> = ({
             )}
 
             <div className="text-center">
-              <h2 className="text-lg font-extrabold text-teal-800 tracking-tight">{settings.mohallaName}</h2>
+              <h2 className="text-lg font-extrabold text-teal-800 tracking-tight">{APP_NAME}</h2>
               <p className="text-[11px] text-slate-500">{settings.address} • {settings.phone}</p>
               <div className="my-2">
                 <span className="inline-block bg-teal-50 text-teal-800 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-teal-200">

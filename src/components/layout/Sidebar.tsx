@@ -1,3 +1,4 @@
+import { APP_NAME } from '../../constants/branding';
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -52,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm text-white truncate">{settings.mohallaName}</h1>
+              <h1 className="font-extrabold text-sm text-white truncate">{APP_NAME}</h1>
               <p className="text-[10px] text-teal-300 font-medium tracking-wide">MOHALLA SYSTEM v1.0</p>
             </div>
           )}

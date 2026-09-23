@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -10,7 +11,7 @@ interface HousePdfExportOptions {
 }
 
 export function generatePdfTable({
-  mohallaName = 'MADINA STREET MOHALLA SOCIETY',
+  mohallaName = APP_NAME,
   title,
   filename,
   headers,
@@ -25,7 +26,7 @@ export function generatePdfTable({
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text(mohallaName, 14, 12);
+  doc.text(APP_NAME, 14, 12);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -65,7 +66,7 @@ export function generatePdfTable({
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184);
-    doc.text(`Page ${i} of ${pageCount} • Madina Street Society Financial System`, 14, 287);
+    doc.text(`Page ${i} of ${pageCount} • ${APP_NAME}`, 14, 287);
   }
 
   doc.save(`${filename}_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -85,7 +86,7 @@ export function generateHouseStatementPdf({
   collectionRate,
   pendingMonths,
   payments,
-  mohallaName = 'Madina Street Mohalla Committee',
+  mohallaName = APP_NAME,
   address = 'Main Boulevard, Madina Street',
   contactPhone = '0300-1234567',
 }: {
@@ -121,7 +122,7 @@ export function generateHouseStatementPdf({
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(mohallaName.toUpperCase(), 14, 14);
+  doc.text(APP_NAME, 14, 14);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');

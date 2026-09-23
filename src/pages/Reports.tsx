@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import { currentMonth, localDate, monthLabel, monthOptions, monthKey } from '../utils/contributionMonth';
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
@@ -257,7 +258,7 @@ export const Reports: React.FC = () => {
       printWindow.document.write(`
         <html>
           <head>
-            <title>${settings.mohallaName || 'Madina Street ERP'} - ${activeTab.toUpperCase()} Report</title>
+            <title>${APP_NAME} - ${activeTab.toUpperCase()} Report</title>
             <style>
               body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 25px; color: #0f172a; background: #fff; }
               h1, h2, h3 { color: #0f766e; margin-bottom: 5px; }
@@ -272,7 +273,7 @@ export const Reports: React.FC = () => {
           </head>
           <body>
             <div style="text-align: center; border-bottom: 2px solid #0f766e; padding-bottom: 10px; margin-bottom: 20px;">
-              <h2>${settings.mohallaName || 'MADINA STREET ERP SYSTEM'}</h2>
+              <h2>${APP_NAME}</h2>
               <p>Official Audit & Financial Report — ${activeTab.toUpperCase()} (${new Date().toLocaleDateString()})</p>
             </div>
             ${printArea.innerHTML}
@@ -304,7 +305,7 @@ export const Reports: React.FC = () => {
     ]);
 
     generatePdfTable({
-      mohallaName: settings.mohallaName || 'MADINA STREET MOHALLA SOCIETY',
+      mohallaName: APP_NAME,
       title: 'OFFICIAL DEFAULTERS & PENDING DUES AUDIT REPORT',
       filename: 'Mohalla_Defaulters_Audit_Report',
       headers,
@@ -329,7 +330,7 @@ export const Reports: React.FC = () => {
     ]);
 
     generatePdfTable({
-      mohallaName: settings.mohallaName,
+      mohallaName: APP_NAME,
       title: 'MASTER HOUSE DIRECTORY & FINANCIAL REGISTER',
       filename: 'Master_House_Directory',
       headers,
@@ -987,7 +988,7 @@ export const Reports: React.FC = () => {
                               paymentMethod: c.paymentMethod,
                               totalPaid: c.totalPaid,
                             })),
-                            mohallaName: settings.mohallaName,
+                            mohallaName: APP_NAME,
                           })
                         }
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors shadow-xs"
@@ -1390,7 +1391,7 @@ export const Reports: React.FC = () => {
               <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-4">
                   <div>
-                    <h3 className="text-base font-black text-slate-900">{settings.mohallaName}</h3>
+                    <h3 className="text-base font-black text-slate-900">{APP_NAME}</h3>
                     <p className="text-xs text-slate-500">Official Statement of Revenue & Operational Outflows (All Contribution Months)</p>
                   </div>
                   <ExportButton filename="Income_Expense_Statement" data={collections} />

@@ -41,10 +41,10 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
 export const api = {
   // Auth
-  login: (email: string, role?: string) => 
+  login: (email: string, password: string) =>
     fetchApi<{ success: boolean; user: User; token: string }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, password }),
     }),
 
   logout: () =>

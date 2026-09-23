@@ -1,3 +1,4 @@
+import { APP_NAME } from '../../constants/branding';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
 import { useSettings } from '../../context/SettingsContext';
@@ -71,7 +72,7 @@ export const DailyCashClosingModal: React.FC<DailyCashClosingModalProps> = ({
         <body>
           <div class="box">
             <div class="header">
-              <div class="title">${settings.mohallaName}</div>
+              <div class="title">${APP_NAME}</div>
               <div class="sub">DAILY CASH CLOSING & AUDIT REPORT</div>
               <div style="font-weight:700; margin-top: 4px; font-size:13px;">Date: ${selectedDate}</div>
             </div>

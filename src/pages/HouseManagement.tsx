@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { House } from '../types/index';
@@ -249,7 +250,7 @@ export const HouseManagement: React.FC = () => {
     }
 
     const currentMonth = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    const mohallaName = settings?.mohallaName || 'Madina Street Mohalla Society';
+    const mohallaName = APP_NAME;
 
     // WhatsApp Reminder Template Message
     const message = `Assalam-o-Alaikum *${house.headName}*,\n\n` +

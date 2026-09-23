@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/branding';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
@@ -144,7 +145,7 @@ export const HouseProfile: React.FC = () => {
       collectionRate: financialSummary.collectionPercentage,
       pendingMonths: financialSummary.pendingMonthsList,
       payments: paymentHistory.filter(c => c.status !== 'Cancelled'),
-      mohallaName: settings.mohallaName,
+      mohallaName: APP_NAME,
       address: settings.address,
       contactPhone: settings.phone,
     });
@@ -492,7 +493,7 @@ export const HouseProfile: React.FC = () => {
         <div className="bg-white rounded-2xl border-2 border-teal-800 p-8 shadow-md space-y-6 print:p-0 print:border-none print:shadow-none">
           {/* Statement Header */}
           <div className="text-center border-b border-slate-200 pb-6">
-            <h2 className="text-2xl font-black text-teal-800">{settings.mohallaName}</h2>
+            <h2 className="text-2xl font-black text-teal-800">{APP_NAME}</h2>
             <p className="text-xs text-slate-500">{settings.address} • {settings.phone}</p>
             <div className="inline-block mt-3 px-4 py-1 bg-teal-50 text-teal-800 text-xs font-bold rounded-full border border-teal-200 uppercase tracking-widest">
               OFFICIAL HOUSE FINANCIAL STATEMENT

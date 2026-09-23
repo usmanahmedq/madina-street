@@ -1,5 +1,5 @@
 {
-  "name": "Madina Street",
+  "name": "Madina Street ERP",
   "description": "Production-ready Mohalla Management System for houses, monthly collections, expenses, staff, salaries, attendance, accounts ledger, reports, and receipt printing.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

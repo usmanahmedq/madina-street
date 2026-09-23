@@ -1,10 +1,9 @@
+import { registerAuthentication, requireJwtSecret, publicUser } from './server/auth';
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { createServer as createHttpServer } from 'http';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
 import { logDatabaseError } from './server/database-errors';
@@ -15,7 +14,7 @@ import { mainDashboardSummary } from './server/dashboard-finance';
 import { currentMonth, monthLabel, houseSummary } from './server/collection-finance';
 import { User, House, Collection, Expense, Staff, SalaryPayment, AttendanceRecord, LedgerEntry, MohallaSettings } from './src/types/index';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'madina-street-super-secret-jwt-key-2026';
+const JWT_SECRET = requireJwtSecret();
 const PORT = 3000;
 
 export const app = express();
@@ -23,94 +22,9 @@ export const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Helper Middleware to extract User from JWT Token
-interface AuthRequest extends Request {
-  user?: User;
-}
-
-const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    req.user = db.get('users')[0];
-    return next();
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as User;
-    const existingUser = db.get('users').find(u => u.id === decoded.id);
-    req.user = existingUser || decoded;
-    next();
-  } catch (err) {
-    req.user = db.get('users')[0];
-    next();
-  }
-};
-
-app.use('/api', db.middleware, authenticateToken);
-
-// ==========================================
-// 1. AUTHENTICATION & USER ROUTES
-// ==========================================
-
-app.post('/api/auth/login', (req: AuthRequest, res: Response) => {
-  const { email, role, username } = req.body;
-  const users = db.get('users');
-  
-  let user = users.find(u => 
-    (email && u.email.toLowerCase() === email.toLowerCase()) ||
-    (username && (u.username || '').toLowerCase() === username.toLowerCase())
-  );
-
-  if (!user && role) {
-    user = users.find(u => u.role === role);
-  }
-  if (!user) {
-    user = users[0];
-  }
-
-  if (user.status === 'Inactive' || user.status === 'Suspended' || user.active === false) {
-    return res.status(403).json({
-      success: false,
-      message: `Access Denied: Your account is currently marked as '${user.status || 'Inactive'}'. Please contact the Welfare Committee Administrator.`
-    });
-  }
-
-  user.lastLogin = new Date().toISOString();
-  user.updatedAt = new Date().toISOString();
-  db.save();
-
-  const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
-  db.logLogin(user, { ip, userAgent: req.headers['user-agent'] || '' });
-
-  const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-
-  db.logAudit(user, 'LOGIN', 'Authentication', `User ${user.name} logged in with role ${user.role}`, ip);
-
-  res.json({
-    success: true,
-    user,
-    token,
-  });
-});
-
-app.post('/api/auth/logout', (req: AuthRequest, res: Response) => {
-  if (req.user) {
-    const loginHistory = db.get('loginHistory') || [];
-    const latest = loginHistory.find(lh => lh.userId === req.user?.id && !lh.logoutTime);
-    if (latest) {
-      latest.logoutTime = new Date().toISOString();
-      db.save();
-    }
-    db.logAudit(req.user, 'LOGOUT', 'Authentication', `User ${req.user.name} logged out`);
-  }
-  res.json({ success: true, message: 'Logged out successfully' });
-});
-
-app.get('/api/auth/me', (req: AuthRequest, res: Response) => {
-  res.json({ success: true, user: req.user });
-});
+interface AuthRequest extends Request { user?: User; }
+app.use('/api', db.middleware);
+registerAuthentication(app, db, JWT_SECRET);
 
 registerCollectionRoutes(app);
 registerExpenseRoutes(app);
@@ -414,7 +328,7 @@ app.get('/api/expenses', (req: AuthRequest, res: Response) => {
 
 app.get('/api/users', (req: AuthRequest, res: Response) => {
   const users = db.get('users') || [];
-  res.json({ success: true, users });
+  res.json({ success: true, users: users.map(publicUser) });
 });
 
 app.post('/api/users', (req: AuthRequest, res: Response) => {

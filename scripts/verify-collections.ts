@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { verificationAuthorization } from './verification-auth';
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import { dashboardPosition, mainDashboardSummary } from '../server/dashboard-finance';
@@ -74,7 +75,8 @@ try {
     const address = server.address() as {
         port: number;
     };
-    const request = async (path: string, body?: unknown) => { const response = await fetch('http://127.0.0.1:' + address.port + path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return { status: response.status, data: await response.json() as any }; };
+    const auth = verificationAuthorization(data.users);
+    const request = async (path: string, body?: unknown) => { const response = await fetch('http://127.0.0.1:' + address.port + path, body === undefined ? { headers: auth } : { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return { status: response.status, data: await response.json() as any }; };
     try {
         const [dashboard, register, main, ledger, reports, closing, financial] = await Promise.all(['/api/collections/dashboard', '/api/collections', '/api/dashboard/stats', '/api/ledger', '/api/reports/summary', '/api/reports/monthly-closing?month=' + currentMonth(), '/api/financial-summary'].map(p => request(p)));
         for (const r of [dashboard, register, main, ledger, reports, closing, financial]) {

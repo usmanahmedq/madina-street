@@ -1,3 +1,4 @@
+import { publicUser } from './auth';
 import type { Express, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { registerStaffRoutes } from './staff-routes';
@@ -34,7 +35,7 @@ export function registerModuleRoutes(app: Express) {
       if (key === 'users') record.active = record.status === 'Active';
       if (['users', 'staff', 'expenses'].includes(key)) record.updatedAt = now();
       db.save();
-      res.json({ success: true, [responseKey]: record });
+      res.json({ success: true, [responseKey]: key === 'users' ? publicUser(record) : record });
     });
   }
   update('/api/users/:id', 'users', 'user', ['name', 'email', 'username', 'role', 'status', 'phone', 'avatar', 'permissions']);

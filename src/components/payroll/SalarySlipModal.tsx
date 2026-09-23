@@ -1,3 +1,4 @@
+import { APP_NAME } from '../../constants/branding';
 import React from 'react';
 import { SalaryPayment } from '../../types/index';
 import { useSettings } from '../../context/SettingsContext';
@@ -35,7 +36,7 @@ export const SalarySlipModal: React.FC<SalarySlipModalProps> = ({ salary, onClos
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(settings.mohallaName || 'MADINA STREET WELFARE SOCIETY', 14, 14);
+    doc.text(APP_NAME, 14, 14);
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -102,7 +103,7 @@ export const SalarySlipModal: React.FC<SalarySlipModalProps> = ({ salary, onClos
 
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    doc.text(`${settings.mohallaName} • Computer Generated Official Slip`, 14, footerY + 20);
+    doc.text(`${APP_NAME} • Computer Generated Official Slip`, 14, footerY + 20);
 
     doc.save(`Salary_Slip_${salary.slipNo}_${salary.staffName.replace(/\s+/g, '_')}.pdf`);
   };
@@ -120,7 +121,7 @@ export const SalarySlipModal: React.FC<SalarySlipModalProps> = ({ salary, onClos
                   بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيْمِ
                 </p>
               )}
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">{settings.mohallaName}</h2>
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">{APP_NAME}</h2>
               <p className="text-xs text-slate-500 font-medium">{settings.address}</p>
               <p className="text-[11px] text-slate-400">Phone: {settings.phone} | Reg: {settings.registrationNo}</p>
             </div>

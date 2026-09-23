@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { verificationAuthorization } from './verification-auth';
 import assert from 'node:assert/strict';
 import { fork, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +57,7 @@ if (process.argv.includes('--serve-test')) {
     });
   };
   const request = async (base: string, path: string, body?: unknown) => {
-    const response = await fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(45000) });
+    const response = await fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers: { ...verificationAuthorization(original!.users), 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(45000) });
     assert.equal(response.status, 200, `HTTP ${response.status}: ${path}`);
     return await response.json() as any;
   };
